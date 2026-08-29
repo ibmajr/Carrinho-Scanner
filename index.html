@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1769ff"><link rel="manifest" href="manifest.webmanifest">
+<title>Carrinho Scanner V4</title>
+<style>
+:root{--b:#1769ff;--bg:#f5f7fa;--c:#fff;--t:#17191c;--m:#69727d;--l:#dde3ea;--g:#18763b;--r:#bd2525}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;color:var(--t)}
+.app{max-width:760px;margin:auto;padding:14px 12px 40px}h1{font-size:23px;margin:0}.sub,.muted{color:var(--m);font-size:13px}
+.card{background:var(--c);border:1px solid var(--l);border-radius:16px;padding:14px;margin:12px 0}
+input,button{font:inherit}input{width:100%;padding:13px;border:1px solid var(--l);border-radius:12px;font-size:16px}
+button{border:0;border-radius:12px;padding:12px 14px;font-weight:750}.primary{background:var(--b);color:#fff}.secondary{background:#edf2ff;color:#174aaf}.danger{background:#fff0f0;color:var(--r)}.ok{background:#edf8ef;color:var(--g)}
+.row{display:flex;gap:8px;align-items:center}.grow{flex:1;min-width:0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.hidden{display:none!important}
+label{display:block;font-size:13px;font-weight:750;margin:8px 0 5px}.total{font-size:34px;font-weight:850}.item{padding:11px 0;border-top:1px solid var(--l);display:flex;justify-content:space-between;gap:10px}.item:first-child{border-top:0}.name{font-weight:750}.right{text-align:right}
+.tabs{display:flex;gap:6px;overflow:auto;margin:12px 0}.tab{white-space:nowrap;background:#e9edf4;color:#39434e}.tab.active{background:var(--b);color:#fff}
+.banner{background:#edf2ff;border-radius:14px;padding:12px;margin:12px 0}.big{font-size:19px;font-weight:800}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}.kpi{border:1px solid var(--l);border-radius:12px;padding:10px}.kpi .v{font-weight:800;font-size:18px}
+.good{color:var(--g)}.bad{color:var(--r)}video{width:100%;border-radius:14px;background:#111;max-height:330px;object-fit:cover}
+canvas{width:100%;height:220px;background:#fff;border:1px solid var(--l);border-radius:12px}
+@media(max-width:520px){.grid{grid-template-columns:1fr}.stack{flex-direction:column;align-items:stretch}.kpis{grid-template-columns:1fr}}
+</style>
+</head>
+<body><div class="app">
+<h1>Carrinho Scanner</h1><div class="sub">Protótipo V4 • histórico e gráfico de preços</div>
+
+<div id="activeBanner" class="banner hidden">
+ <div class="muted">Compra em andamento</div><div id="activeTitle" class="big"></div><div id="activeDate" class="muted"></div>
+</div>
+
+<div class="tabs">
+<button class="tab active" data-tab="buy">Compra</button>
+<button class="tab" data-tab="receipt">Cupom</button>
+<button class="tab" data-tab="history">Histórico</button>
+<button class="tab" data-tab="prices">Preços</button>
+</div>
+
+<section id="buy" class="panel">
+<div id="startCard" class="card">
+ <strong>Iniciar nova compra</strong>
+ <div class="muted">Informe onde você está comprando. A data e a hora serão registradas automaticamente.</div>
+ <label>Local / mercado</label><input id="store" placeholder="Ex.: Condor, Carrefour, Muffato">
+ <button id="start" class="primary" style="width:100%;margin-top:10px">Iniciar compra agora</button>
+</div>
+
+<div id="shopping" class="hidden">
+<div class="card">
+ <div class="row stack"><input id="ean" class="grow" inputmode="numeric" placeholder="Código de barras / EAN"><button id="scan" class="secondary">📷 Escanear</button><button id="find" class="primary">Buscar</button></div>
+ <div id="camBox" class="hidden" style="margin-top:10px"><video id="video" playsinline muted></video><button id="stopCam" class="secondary" style="width:100%;margin-top:7px">Fechar câmera</button></div>
+ <div id="lookup" class="muted" style="margin-top:7px"></div>
+
+ <div id="priceHint" class="banner hidden">
+   <div class="name" id="hintName"></div>
+   <div class="kpis">
+     <div class="kpi"><div class="muted">Último preço</div><div class="v" id="lastPrice">—</div><div class="muted" id="lastMeta"></div></div>
+     <div class="kpi"><div class="muted">Menor preço</div><div class="v" id="minPrice">—</div></div>
+     <div class="kpi"><div class="muted">Média</div><div class="v" id="avgPrice">—</div></div>
+   </div>
+   <div id="priceCompare" style="margin-top:8px;font-weight:700"></div>
+ </div>
+
+ <div id="manual" class="hidden"><label>Nome do produto</label><input id="name" placeholder="Digite o produto"></div>
+ <label style="display:flex;gap:8px;align-items:center"><input id="weightToggle" type="checkbox" style="width:20px"> Vendido por kg</label>
+ <div id="unit" class="grid"><div><label>Preço unitário</label><input id="price" inputmode="decimal" placeholder="R$ 0,00"></div><div><label>Quantidade</label><input id="qty" type="number" min="1" value="1"></div></div>
+ <div id="weight" class="grid hidden"><div><label>Preço/kg</label><input id="kgprice" inputmode="decimal" placeholder="R$ 0,00"></div><div><label>Peso (kg)</label><input id="kg" inputmode="decimal" placeholder="Opcional"></div></div>
+ <div id="msg" class="muted" style="margin:7px 0"></div><button id="add" class="primary" style="width:100%">Adicionar</button>
+</div>
+<div class="card"><div class="muted">Total estimado</div><div id="total" class="total">R$ 0,00</div><div id="cart"></div><button id="finish" class="ok" style="width:100%;margin-top:10px">Finalizar e conferir cupom</button><button id="cancel" class="danger" style="width:100%;margin-top:7px">Cancelar compra</button></div>
+</div>
+</section>
+
+<section id="receipt" class="panel hidden">
+<div class="card">
+<strong>Conferência da NFC-e</strong><div class="muted">Preferência: QR Code. Se não ler, use a chave de 44 dígitos.</div>
+<button id="scanQR" class="secondary" style="width:100%;margin-top:10px">📷 Escanear QR da NFC-e</button>
+<div id="qrCamBox" class="hidden" style="margin-top:10px"><video id="qrVideo" playsinline muted></video><button id="stopQR" class="secondary" style="width:100%;margin-top:7px">Fechar câmera</button></div>
+<label>Link / conteúdo do QR</label><input id="qr">
+<label>Chave de acesso (44 dígitos)</label><input id="key" inputmode="numeric" maxlength="60" placeholder="4126...">
+<div class="grid"><div><label>Total do cupom</label><input id="receiptTotal" inputmode="decimal" placeholder="R$ 0,00"></div><div><label>Desconto</label><input id="discount" inputmode="decimal" placeholder="R$ 0,00"></div></div>
+<button id="compare" class="primary" style="width:100%;margin-top:10px">Salvar cupom e comparar</button>
+<div id="comparison" style="margin-top:10px"></div>
+</div>
+</section>
+
+<section id="history" class="panel hidden"><div class="card"><div class="row"><strong class="grow">Histórico de compras</strong><button id="backup" class="secondary">Backup</button></div><div id="historyList"></div></div></section>
+
+<section id="prices" class="panel hidden">
+<div class="card">
+<strong>Histórico de preços</strong>
+<div class="muted">Toque em um produto para ver a evolução.</div>
+<div id="priceList"></div>
+</div>
+<div id="chartCard" class="card hidden">
+<div class="row"><div class="grow"><div class="name" id="chartTitle"></div><div class="muted" id="chartSubtitle"></div></div><button id="closeChart" class="secondary">Fechar</button></div>
+<canvas id="chart" width="700" height="220"></canvas>
+<div id="chartRows"></div>
+</div>
+</section>
+</div>
+
+<script>
+(()=>{
+const $=x=>document.getElementById(x), money=n=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(n||0);
+const num=v=>{let s=String(v||'').trim();if(!s)return 0;if(s.includes(','))s=s.replace(/\./g,'').replace(',','.');let n=Number(s);return Number.isFinite(n)?n:0};
+const fmt=s=>new Date(s).toLocaleString('pt-BR');
+let products=JSON.parse(localStorage.getItem('v4_products')||'{}'), purchases=JSON.parse(localStorage.getItem('v4_purchases')||'[]'), active=JSON.parse(localStorage.getItem('v4_active')||'null'), foundName='', stream=null,timer=null,qstream=null,qtimer=null,currentKey='';
+const demo={"7896004704623":"Maleato de Dexclorfeniramina + Betametasona EMS 120 ml"};
+function save(){localStorage.setItem('v4_products',JSON.stringify(products));localStorage.setItem('v4_purchases',JSON.stringify(purchases));localStorage.setItem('v4_active',JSON.stringify(active))}
+function historyFor(code,name){
+  const key=code||name, arr=[];
+  purchases.forEach(p=>p.items.forEach(x=>{
+    if((x.code||x.name)===key) arr.push({date:p.started,store:p.store,price:x.price,unit:x.byWeight?'kg':'un'});
+  }));
+  return arr.sort((a,b)=>new Date(a.date)-new Date(b.date));
+}
+function showPriceHint(code,name){
+  const h=historyFor(code,name);
+  currentKey=code||name;
+  if(!h.length){$('priceHint').classList.add('hidden');return}
+  const last=h[h.length-1], vals=h.map(x=>x.price), min=Math.min(...vals), avg=vals.reduce((a,b)=>a+b,0)/vals.length;
+  $('priceHint').classList.remove('hidden');$('hintName').textContent=name;$('lastPrice').textContent=money(last.price)+'/'+last.unit;
+  $('lastMeta').textContent=last.store+' • '+fmt(last.date);$('minPrice').textContent=money(min)+'/'+last.unit;$('avgPrice').textContent=money(avg)+'/'+last.unit;
+  $('priceCompare').textContent='';
+}
+function updateCurrentPriceComparison(){
+  if(!currentKey)return;
+  const h=historyFor(currentKey,currentKey), val=$('weightToggle').checked?num($('kgprice').value):num($('price').value);
+  if(!h.length||val<=0){$('priceCompare').textContent='';return}
+  const last=h[h.length-1].price,d=val-last,pct=last?d/last*100:0;
+  const el=$('priceCompare');
+  if(Math.abs(d)<0.005){el.className='good';el.textContent='Mesmo preço da última compra.'}
+  else if(d>0){el.className='bad';el.textContent=`Hoje está ${money(d)} mais caro (+${pct.toFixed(1).replace('.',',')}%).`}
+  else{el.className='good';el.textContent=`Hoje está ${money(Math.abs(d))} mais barato (${pct.toFixed(1).replace('.',',')}%).`}
+}
+function update(){
+ const on=!!active;$('startCard').classList.toggle('hidden',on);$('shopping').classList.toggle('hidden',!on);$('activeBanner').classList.toggle('hidden',!on);
+ if(on){$('activeTitle').textContent=active.store;$('activeDate').textContent='Iniciada em '+fmt(active.started);renderCart()}
+ renderHistory();renderPrices();
+}
+$('start').onclick=()=>{let store=$('store').value.trim();if(!store){$('store').focus();return}active={id:Date.now(),store,started:new Date().toISOString(),items:[]};save();update()};
+function lookup(){let c=$('ean').value.trim(),n=products[c]||demo[c];$('manual').classList.add('hidden');foundName='';currentKey='';if(!c){$('lookup').textContent='Digite ou escaneie o código.';$('priceHint').classList.add('hidden');return}if(n){foundName=n;$('lookup').textContent='Encontrado: '+n;showPriceHint(c,n)}else{$('lookup').textContent='Código novo. Digite o nome uma vez:';$('manual').classList.remove('hidden');$('priceHint').classList.add('hidden');$('name').focus()}}
+$('find').onclick=lookup;$('ean').onkeydown=e=>{if(e.key==='Enter')lookup()};
+$('price').addEventListener('input',updateCurrentPriceComparison);$('kgprice').addEventListener('input',updateCurrentPriceComparison);
+$('weightToggle').onchange=()=>{$('unit').classList.toggle('hidden',$('weightToggle').checked);$('weight').classList.toggle('hidden',!$('weightToggle').checked);updateCurrentPriceComparison()};
+$('add').onclick=()=>{if(!active)return;let code=$('ean').value.trim(),name=foundName||$('name').value.trim();if(!name){$('msg').textContent='Identifique o produto.';return}if(!foundName&&code)products[code]=name;let w=$('weightToggle').checked,item;
+if(w){let p=num($('kgprice').value),kg=num($('kg').value);if(p<=0){$('msg').textContent='Informe o preço/kg.';return}item={code,name,byWeight:true,price:p,kg,pending:kg<=0,total:kg>0?p*kg:0}}
+else{let p=num($('price').value),q=Math.max(1,parseInt($('qty').value)||1);if(p<=0){$('msg').textContent='Informe o preço.';return}item={code,name,byWeight:false,price:p,qty:q,pending:false,total:p*q}}
+active.items.push(item);save();['ean','name','price','kgprice','kg'].forEach(i=>$(i).value='');$('qty').value=1;$('manual').classList.add('hidden');$('lookup').textContent='';$('priceHint').classList.add('hidden');foundName='';currentKey='';renderCart()};
+function renderCart(){if(!active)return;let b=$('cart');b.innerHTML='';active.items.forEach((x,i)=>{let r=document.createElement('div');r.className='item';r.innerHTML=`<div><div class="name">${x.name}</div><div class="muted">${x.byWeight?(x.pending?money(x.price)+'/kg • peso pendente':money(x.price)+'/kg • '+x.kg+' kg'):x.qty+' × '+money(x.price)}</div></div><div class="right"><div class="name">${x.pending?'Pendente':money(x.total)}</div></div>`;let d=document.createElement('button');d.className='danger';d.textContent='×';d.onclick=()=>{active.items.splice(i,1);save();renderCart()};r.lastChild.appendChild(d);b.appendChild(r)});$('total').textContent=money(active.items.reduce((s,x)=>s+(x.total||0),0))}
+$('finish').onclick=()=>{if(!active||!active.items.length)return;active.finished=new Date().toISOString();active.estimatedTotal=active.items.reduce((s,x)=>s+(x.total||0),0);purchases.unshift(active);active=null;save();update();document.querySelector('[data-tab="receipt"]').click()};
+$('cancel').onclick=()=>{if(confirm('Cancelar esta compra?')){active=null;save();update()}};
+function renderHistory(){let b=$('historyList');b.innerHTML='';if(!purchases.length){b.innerHTML='<div class="muted">Nenhuma compra salva.</div>';return}purchases.forEach(p=>{let r=document.createElement('div');r.className='item';r.innerHTML=`<div><div class="name">${p.store}</div><div class="muted">${fmt(p.started)} • ${p.items.length} produtos</div></div><div class="right"><div class="name">${money(p.receiptTotal??p.estimatedTotal)}</div><div class="muted">estimado ${money(p.estimatedTotal)}</div></div>`;b.appendChild(r)})}
+function buildPriceMap(){let map={};purchases.forEach(p=>p.items.forEach(x=>{let k=x.code||x.name;if(!map[k])map[k]={key:k,name:x.name,a:[]};map[k].a.push({date:p.started,store:p.store,price:x.price,unit:x.byWeight?'kg':'un'})}));Object.values(map).forEach(x=>x.a.sort((a,b)=>new Date(a.date)-new Date(b.date)));return map}
+function renderPrices(){let map=buildPriceMap(),b=$('priceList');b.innerHTML='';let a=Object.values(map);if(!a.length){b.innerHTML='<div class="muted">Nenhum preço registrado.</div>';return}a.forEach(x=>{let e=x.a[x.a.length-1],min=Math.min(...x.a.map(y=>y.price)),r=document.createElement('div');r.className='item';r.innerHTML=`<div><div class="name">${x.name}</div><div class="muted">${x.a.length} registro(s) • menor ${money(min)}/${e.unit}</div></div><div class="right"><div class="name">${money(e.price)}/${e.unit}</div><button class="secondary" style="margin-top:6px">Ver gráfico</button></div>`;r.querySelector('button').onclick=()=>showChart(x);b.appendChild(r)})}
+function showChart(x){
+ $('chartCard').classList.remove('hidden');$('chartTitle').textContent=x.name;$('chartSubtitle').textContent='Evolução do preço pago';
+ const c=$('chart'),ctx=c.getContext('2d'),W=c.width,H=c.height,pad=35;ctx.clearRect(0,0,W,H);
+ const vals=x.a.map(e=>e.price),min=Math.min(...vals),max=Math.max(...vals),lo=min===max?min*.9:min,hi=min===max?max*1.1:max,range=(hi-lo)||1;
+ ctx.strokeStyle='#d9dee5';ctx.lineWidth=1;for(let i=0;i<4;i++){let y=pad+i*(H-2*pad)/3;ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-pad,y);ctx.stroke()}
+ ctx.strokeStyle='#1769ff';ctx.lineWidth=3;ctx.beginPath();x.a.forEach((e,i)=>{let xx=x.a.length===1?W/2:pad+i*(W-2*pad)/(x.a.length-1),yy=H-pad-(e.price-lo)/range*(H-2*pad);i?ctx.lineTo(xx,yy):ctx.moveTo(xx,yy)});ctx.stroke();
+ ctx.fillStyle='#1769ff';x.a.forEach((e,i)=>{let xx=x.a.length===1?W/2:pad+i*(W-2*pad)/(x.a.length-1),yy=H-pad-(e.price-lo)/range*(H-2*pad);ctx.beginPath();ctx.arc(xx,yy,5,0,Math.PI*2);ctx.fill()});
+ const rows=$('chartRows');rows.innerHTML='';x.a.slice().reverse().forEach(e=>{let r=document.createElement('div');r.className='item';r.innerHTML=`<div><div class="name">${fmt(e.date)}</div><div class="muted">${e.store}</div></div><div class="name">${money(e.price)}/${e.unit}</div>`;rows.appendChild(r)})
+}
+$('closeChart').onclick=()=>$('chartCard').classList.add('hidden');
+$('compare').onclick=()=>{if(!purchases.length){$('comparison').textContent='Finalize uma compra primeiro.';return}let p=purchases[0],t=num($('receiptTotal').value),key=$('key').value.replace(/\D/g,'');if(key&&key.length!==44){$('comparison').innerHTML='<span style="color:var(--r)">A chave precisa ter 44 dígitos.</span>';return}p.receiptTotal=t||null;p.discount=num($('discount').value);p.qr=$('qr').value.trim();p.key=key;save();let d=t-p.estimatedTotal;$('comparison').innerHTML=t?`<div class="big">${Math.abs(d)<.01?'✓ Valores conferem':(d>0?money(d)+' acima do carrinho':money(Math.abs(d))+' abaixo do carrinho')}</div><div class="muted">Carrinho: ${money(p.estimatedTotal)} • Cupom: ${money(t)}</div>`:'Cupom salvo.';renderHistory()};
+$('backup').onclick=()=>{let blob=new Blob([JSON.stringify({date:new Date().toISOString(),products,purchases},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='backup-carrinho-scanner-v4.json';a.click()};
+document.querySelectorAll('.tab').forEach(x=>x.onclick=()=>{document.querySelectorAll('.tab').forEach(y=>y.classList.remove('active'));document.querySelectorAll('.panel').forEach(y=>y.classList.add('hidden'));x.classList.add('active');$(x.dataset.tab).classList.remove('hidden');update()});
+async function stop(which){let s=which==='qr'?qstream:stream,t=which==='qr'?qtimer:timer;if(t)clearInterval(t);if(s)s.getTracks().forEach(x=>x.stop());if(which==='qr'){qstream=null;qtimer=null;$('qrCamBox').classList.add('hidden')}else{stream=null;timer=null;$('camBox').classList.add('hidden')}}
+async function camera(mode){let status=mode==='qr'?$('comparison'):$('msg');if(!('BarcodeDetector'in window)){status.textContent='Leitura por câmera não disponível neste navegador.';return}try{let fm=await BarcodeDetector.getSupportedFormats(),wanted=mode==='qr'?['qr_code']:['ean_13','ean_8','upc_a','upc_e'],formats=wanted.filter(x=>fm.includes(x)),det=new BarcodeDetector({formats:formats.length?formats:fm}),s=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false}),v=mode==='qr'?$('qrVideo'):$('video');v.srcObject=s;await v.play();if(mode==='qr'){qstream=s;$('qrCamBox').classList.remove('hidden')}else{stream=s;$('camBox').classList.remove('hidden')}let ti=setInterval(async()=>{try{let c=await det.detect(v);if(c.length){if(mode==='qr'){$('qr').value=c[0].rawValue;let m=c[0].rawValue.match(/\d{44}/);if(m)$('key').value=m[0];await stop('qr');$('comparison').textContent='QR lido.'}else{$('ean').value=c[0].rawValue;await stop('product');lookup()}}}catch(e){}},400);if(mode==='qr')qtimer=ti;else timer=ti}catch(e){status.textContent='Não foi possível abrir a câmera.'}}
+$('scan').onclick=()=>camera('product');$('stopCam').onclick=()=>stop('product');$('scanQR').onclick=()=>camera('qr');$('stopQR').onclick=()=>stop('qr');
+if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js');update();
+})();
+</script></body></html>
