@@ -1,5 +1,5 @@
 {
-  "name": "Carrinho Scanner V10",
+  "name": "Carrinho Scanner V11",
   "short_name": "Carrinho Scanner",
   "start_url": "./",
   "display": "standalone",
@@ -17,5 +17,5 @@
       "type": "image/png"
     }
   ],
-  "description": "Scanner de compras com histórico completo, edição, PDF por compra e QR reforçado."
+  "description": "Scanner de compras: lê o código, mostra o produto e só adiciona após informar valor e quantidade."
 }

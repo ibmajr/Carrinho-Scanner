@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#1769ff"><link rel="manifest" href="manifest.webmanifest">
-<title>Carrinho Scanner V10</title>
+<title>Carrinho Scanner V11</title>
 <style>
 :root{--b:#1769ff;--bg:#f5f7fa;--c:#fff;--t:#17191c;--m:#69727d;--l:#dde3ea;--g:#18763b;--r:#bd2525}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;color:var(--t)}
@@ -38,7 +38,7 @@ canvas{width:100%;height:220px;background:#fff;border:1px solid var(--l);border-
 </style>
 </head>
 <body><div class="app">
-<h1>Carrinho Scanner</h1><div class="sub">V10 • histórico completo + PDF de qualquer compra</div>
+<h1>Carrinho Scanner</h1><div class="sub">V11 • escanear → preencher → OK → lista</div>
 
 <div id="activeBanner" class="banner hidden">
  <div class="muted">Compra em andamento</div><div id="activeTitle" class="big"></div><div id="activeDate" class="muted"></div>
@@ -80,7 +80,7 @@ canvas{width:100%;height:220px;background:#fff;border:1px solid var(--l);border-
  <label style="display:flex;gap:8px;align-items:center"><input id="weightToggle" type="checkbox" style="width:20px"> Vendido por kg</label>
  <div id="unit" class="grid"><div><label>Preço unitário</label><input id="price" inputmode="decimal" placeholder="R$ 0,00"></div><div><label>Quantidade</label><input id="qty" type="number" min="1" value="1"></div></div>
  <div id="weight" class="grid hidden"><div><label>Preço/kg</label><input id="kgprice" inputmode="decimal" placeholder="R$ 0,00"></div><div><label>Peso (kg)</label><input id="kg" inputmode="decimal" placeholder="Opcional"></div></div>
- <div id="msg" class="muted" style="margin:7px 0"></div><button id="add" class="primary" style="width:100%">Adicionar</button>
+ <div id="msg" class="muted" style="margin:7px 0"></div><button id="add" class="primary" style="width:100%">OK • Adicionar à lista</button>
  <div id="editPanel" class="editbox hidden">
    <strong>Editar item</strong>
    <div class="muted" id="editLabel"></div>
@@ -193,10 +193,10 @@ const $=x=>document.getElementById(x), money=n=>new Intl.NumberFormat('pt-BR',{s
 const num=v=>{let s=String(v||'').trim();if(!s)return 0;if(s.includes(','))s=s.replace(/\./g,'').replace(',','.');let n=Number(s);return Number.isFinite(n)?n:0};
 const fmt=s=>new Date(s).toLocaleString('pt-BR');
 const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]));
-// V10 migra automaticamente os dados anteriores para não perder histórico.
-let products=JSON.parse(localStorage.getItem('v10_products')||localStorage.getItem('v9_products')||localStorage.getItem('v6_products')||localStorage.getItem('v5_products')||localStorage.getItem('v4_products')||'{}'),
-    purchases=JSON.parse(localStorage.getItem('v10_purchases')||localStorage.getItem('v9_purchases')||localStorage.getItem('v6_purchases')||localStorage.getItem('v5_purchases')||localStorage.getItem('v4_purchases')||'[]'),
-    active=JSON.parse(localStorage.getItem('v10_active')||localStorage.getItem('v9_active')||localStorage.getItem('v6_active')||localStorage.getItem('v5_active')||localStorage.getItem('v4_active')||'null'),
+// V11 migra automaticamente os dados anteriores para não perder histórico.
+let products=JSON.parse(localStorage.getItem('v11_products')||localStorage.getItem('v10_products')||localStorage.getItem('v9_products')||localStorage.getItem('v6_products')||localStorage.getItem('v5_products')||localStorage.getItem('v4_products')||'{}'),
+    purchases=JSON.parse(localStorage.getItem('v11_purchases')||localStorage.getItem('v10_purchases')||localStorage.getItem('v9_purchases')||localStorage.getItem('v6_purchases')||localStorage.getItem('v5_purchases')||localStorage.getItem('v4_purchases')||'[]'),
+    active=JSON.parse(localStorage.getItem('v11_active')||localStorage.getItem('v10_active')||localStorage.getItem('v9_active')||localStorage.getItem('v6_active')||localStorage.getItem('v5_active')||localStorage.getItem('v4_active')||'null'),
     foundName='',foundSource='',stream=null,timer=null,qstream=null,qtimer=null,currentKey='',lookupSeq=0,scannerBusy=false,scanLockedCode='',lastComparison=null,lastReceipt=null,editingIndex=-1,resumeScannerAfterAdd=false,selectedHistoryIndex=-1;
 
 const verifiedSeed={
@@ -208,9 +208,9 @@ const verifiedSeed={
 };
 
 function save(){
- localStorage.setItem('v10_products',JSON.stringify(products));
- localStorage.setItem('v10_purchases',JSON.stringify(purchases));
- localStorage.setItem('v10_active',JSON.stringify(active));
+ localStorage.setItem('v11_products',JSON.stringify(products));
+ localStorage.setItem('v11_purchases',JSON.stringify(purchases));
+ localStorage.setItem('v11_active',JSON.stringify(active));
 }
 function historyFor(code,name){
   const key=code||name, arr=[];
@@ -313,52 +313,55 @@ async function lookup(){
    $('manual').classList.remove('hidden');$('name').focus();
  }
 }
-function addScannedToCart(code,name){
- if(!active)return;
- let existing=active.items.find(x=>!x.byWeight && x.code===code);
- if(existing){
-   existing.qty=(Number(existing.qty)||1)+1;
-   existing.total=(Number(existing.price)||0)*existing.qty;
- }else{
-   active.items.push({code,name,byWeight:false,price:0,qty:1,pending:false,pendingPrice:true,total:0});
- }
- save();renderCart();
-}
-function prepareUnknownProduct(code){
+function prepareScannedProduct(code,result){
  resumeScannerAfterAdd=true;
  $('ean').value=code;
- foundName='';foundSource='';
- $('manual').classList.remove('hidden');
- $('name').value='';$('price').value='';$('qty').value='1';
+ $('price').value='';$('qty').value='1';$('kgprice').value='';$('kg').value='';
  $('weightToggle').checked=false;$('unit').classList.remove('hidden');$('weight').classList.add('hidden');
- $('lookup').textContent='Produto não reconhecido. Digite o nome e o valor antes de adicionar à lista.';
- setSource('Será salvo no seu cadastro');
- $('msg').textContent='Preencha nome e valor e toque em Adicionar.';
- $('name').focus();
+ currentKey=code;
+
+ if(result){
+   foundName=result.name;foundSource=result.source||'';
+   $('manual').classList.add('hidden');
+   $('name').value='';
+   $('lookup').innerHTML='Produto encontrado: <b>'+esc(foundName)+'</b>';
+   setSource(foundSource);
+   showPriceHint(code,foundName);
+   $('msg').textContent='Informe o valor e a quantidade. Depois toque em OK para adicionar à lista.';
+   setTimeout(()=>$('price').focus(),80);
+ }else{
+   foundName='';foundSource='';
+   $('manual').classList.remove('hidden');
+   $('name').value='';
+   $('lookup').textContent='Produto não reconhecido.';
+   setSource('Será salvo no seu cadastro');
+   $('priceHint').classList.add('hidden');
+   $('msg').textContent='Digite o nome, o valor e a quantidade. Depois toque em OK para adicionar à lista.';
+   setTimeout(()=>$('name').focus(),80);
+ }
 }
 async function handleScannedProduct(code){
  if(scannerBusy||!active)return;
  scannerBusy=true;
  $('msg').textContent='Identificando '+code+'...';
  try{
+   // Depois da leitura, a câmera para. Nenhum produto entra automaticamente na lista.
+   await stop('product');
    const r=await resolveProduct(code);
-   if(r){
-     addScannedToCart(code,r.name);
-     $('msg').innerHTML='✓ <b>'+esc(r.name)+'</b> adicionado. Aponte para o próximo produto.';
-     $('ean').value='';foundName='';foundSource='';setSource('');
-   }else{
-     await stop('product');
-     prepareUnknownProduct(code);
-   }
- }finally{scannerBusy=false}
+   prepareScannedProduct(code,r);
+ }catch(e){
+   prepareScannedProduct(code,null);
+ }finally{
+   scannerBusy=false;
+ }
 }
 $('find').onclick=lookup;$('ean').onkeydown=e=>{if(e.key==='Enter')lookup()};
 $('price').addEventListener('input',updateCurrentPriceComparison);$('kgprice').addEventListener('input',updateCurrentPriceComparison);
 $('weightToggle').onchange=()=>{$('unit').classList.toggle('hidden',$('weightToggle').checked);$('weight').classList.toggle('hidden',!$('weightToggle').checked);updateCurrentPriceComparison()};
 $('add').onclick=()=>{if(!active)return;let code=$('ean').value.trim(),name=foundName||$('name').value.trim();if(!name){$('msg').textContent='Identifique o produto.';return}if(!foundName&&code)products[code]={name,source:'Cadastrado por você'};let w=$('weightToggle').checked,item;
 if(w){let p=num($('kgprice').value),kg=num($('kg').value);if(p<=0){$('msg').textContent='Informe o preço/kg.';return}item={code,name,byWeight:true,price:p,kg,pending:kg<=0,total:kg>0?p*kg:0}}
-else{let p=num($('price').value),q=Math.max(1,num($('qty').value)||1);if(p<=0){$('msg').textContent='Informe o preço.';return}item={code,name,byWeight:false,price:p,qty:q,pending:false,pendingPrice:false,total:p*q}}
-active.items.push(item);save();['ean','name','price','kgprice','kg'].forEach(i=>$(i).value='');$('qty').value=1;$('manual').classList.add('hidden');$('lookup').textContent='';setSource('');$('priceHint').classList.add('hidden');foundName='';foundSource='';currentKey='';renderCart();const restart=resumeScannerAfterAdd;resumeScannerAfterAdd=false;if(restart)setTimeout(()=>camera('product'),120)};
+else{let p=num($('price').value),q=num($('qty').value);if(p<=0){$('msg').textContent='Informe o valor do produto.';return}if(q<=0){$('msg').textContent='Informe uma quantidade válida.';return}item={code,name,byWeight:false,price:p,qty:q,pending:false,pendingPrice:false,total:p*q}}
+active.items.push(item);save();['ean','name','price','kgprice','kg'].forEach(i=>$(i).value='');$('qty').value=1;$('manual').classList.add('hidden');$('lookup').textContent='';setSource('');$('priceHint').classList.add('hidden');foundName='';foundSource='';currentKey='';renderCart();$('msg').textContent='✓ Produto adicionado à lista.';const restart=resumeScannerAfterAdd;resumeScannerAfterAdd=false;if(restart)setTimeout(()=>camera('product'),250)};
 function renderCart(){
  if(!active)return;
  let b=$('cart');b.innerHTML='';
@@ -593,9 +596,9 @@ function normalizeOfficialUrl(raw){
  if(/^http:\/\//i.test(u))u='https://'+u.slice(7);
  return u;
 }
-function backendBase(){return (localStorage.getItem('v10_nfce_backend')||localStorage.getItem('v9_nfce_backend')||'').trim().replace(/\/$/,'')}
+function backendBase(){return (localStorage.getItem('v11_nfce_backend')||localStorage.getItem('v10_nfce_backend')||localStorage.getItem('v9_nfce_backend')||'').trim().replace(/\/$/,'')}
 function updateBackendStatus(){const u=backendBase();$('backendUrl').value=u;$('backendStatus').textContent=u?'✓ Servidor configurado: '+u:'Servidor ainda não configurado. A NFC-e pode ser aberta, mas a importação automática depende deste servidor.'}
-$('saveBackend').onclick=()=>{let u=$('backendUrl').value.trim().replace(/\/$/,'');if(u&&!/^https:\/\//i.test(u)){alert('Use um endereço https://');return}if(u)localStorage.setItem('v10_nfce_backend',u);else{localStorage.removeItem('v10_nfce_backend');localStorage.removeItem('v9_nfce_backend');}updateBackendStatus()};
+$('saveBackend').onclick=()=>{let u=$('backendUrl').value.trim().replace(/\/$/,'');if(u&&!/^https:\/\//i.test(u)){alert('Use um endereço https://');return}if(u)localStorage.setItem('v11_nfce_backend',u);else{localStorage.removeItem('v11_nfce_backend');localStorage.removeItem('v10_nfce_backend');localStorage.removeItem('v9_nfce_backend');}updateBackendStatus()};
 async function fetchReceiptHtml(url){
  const b=backendBase();
  if(b){
