@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#1769ff"><link rel="manifest" href="manifest.webmanifest">
-<title>Carrinho Scanner V4</title>
+<title>Carrinho Scanner V5</title>
 <style>
 :root{--b:#1769ff;--bg:#f5f7fa;--c:#fff;--t:#17191c;--m:#69727d;--l:#dde3ea;--g:#18763b;--r:#bd2525}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;color:var(--t)}
@@ -18,11 +18,14 @@ label{display:block;font-size:13px;font-weight:750;margin:8px 0 5px}.total{font-
 .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}.kpi{border:1px solid var(--l);border-radius:12px;padding:10px}.kpi .v{font-weight:800;font-size:18px}
 .good{color:var(--g)}.bad{color:var(--r)}video{width:100%;border-radius:14px;background:#111;max-height:330px;object-fit:cover}
 canvas{width:100%;height:220px;background:#fff;border:1px solid var(--l);border-radius:12px}
+.source{display:inline-block;margin-top:6px;padding:4px 8px;border-radius:999px;background:#eef3f8;color:#4b5968;font-size:12px;font-weight:700}
+.loading{display:inline-block;width:14px;height:14px;border:2px solid #cfd8e3;border-top-color:var(--b);border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px;margin-right:5px}
+@keyframes spin{to{transform:rotate(360deg)}}
 @media(max-width:520px){.grid{grid-template-columns:1fr}.stack{flex-direction:column;align-items:stretch}.kpis{grid-template-columns:1fr}}
 </style>
 </head>
 <body><div class="app">
-<h1>Carrinho Scanner</h1><div class="sub">Protótipo V4 • histórico e gráfico de preços</div>
+<h1>Carrinho Scanner</h1><div class="sub">V5 • identificação automática de produtos + histórico de preços</div>
 
 <div id="activeBanner" class="banner hidden">
  <div class="muted">Compra em andamento</div><div id="activeTitle" class="big"></div><div id="activeDate" class="muted"></div>
@@ -48,6 +51,7 @@ canvas{width:100%;height:220px;background:#fff;border:1px solid var(--l);border-
  <div class="row stack"><input id="ean" class="grow" inputmode="numeric" placeholder="Código de barras / EAN"><button id="scan" class="secondary">📷 Escanear</button><button id="find" class="primary">Buscar</button></div>
  <div id="camBox" class="hidden" style="margin-top:10px"><video id="video" playsinline muted></video><button id="stopCam" class="secondary" style="width:100%;margin-top:7px">Fechar câmera</button></div>
  <div id="lookup" class="muted" style="margin-top:7px"></div>
+ <div id="lookupSource" class="source hidden"></div>
 
  <div id="priceHint" class="banner hidden">
    <div class="name" id="hintName"></div>
@@ -103,9 +107,25 @@ canvas{width:100%;height:220px;background:#fff;border:1px solid var(--l);border-
 const $=x=>document.getElementById(x), money=n=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(n||0);
 const num=v=>{let s=String(v||'').trim();if(!s)return 0;if(s.includes(','))s=s.replace(/\./g,'').replace(',','.');let n=Number(s);return Number.isFinite(n)?n:0};
 const fmt=s=>new Date(s).toLocaleString('pt-BR');
-let products=JSON.parse(localStorage.getItem('v4_products')||'{}'), purchases=JSON.parse(localStorage.getItem('v4_purchases')||'[]'), active=JSON.parse(localStorage.getItem('v4_active')||'null'), foundName='', stream=null,timer=null,qstream=null,qtimer=null,currentKey='';
-const demo={"7896004704623":"Maleato de Dexclorfeniramina + Betametasona EMS 120 ml"};
-function save(){localStorage.setItem('v4_products',JSON.stringify(products));localStorage.setItem('v4_purchases',JSON.stringify(purchases));localStorage.setItem('v4_active',JSON.stringify(active))}
+// V5 migra automaticamente os dados da V4 para não perder histórico.
+let products=JSON.parse(localStorage.getItem('v5_products')||localStorage.getItem('v4_products')||'{}'),
+    purchases=JSON.parse(localStorage.getItem('v5_purchases')||localStorage.getItem('v4_purchases')||'[]'),
+    active=JSON.parse(localStorage.getItem('v5_active')||localStorage.getItem('v4_active')||'null'),
+    foundName='',foundSource='',stream=null,timer=null,qstream=null,qtimer=null,currentKey='',lookupSeq=0;
+
+const verifiedSeed={
+ "7896004704623":{name:"Maleato de Dexclorfeniramina + Betametasona EMS 120 ml",source:"Cadastro verificado"},
+ "7891097104640":{name:"Iogurte Batavo Pense Zero Ameixa Zero Lactose 1,15 kg",source:"Cadastro verificado"},
+ "7896098900239":{name:"Detergente Ypê Coco 500 ml",source:"Cadastro verificado"},
+ "7891999970053":{name:"Queijo Parmesão Ralado Vigor 50 g",source:"Cadastro verificado"},
+ "7896183210038":{name:"Leite em Pó Glória Integral",source:"Cadastro verificado"}
+};
+
+function save(){
+ localStorage.setItem('v5_products',JSON.stringify(products));
+ localStorage.setItem('v5_purchases',JSON.stringify(purchases));
+ localStorage.setItem('v5_active',JSON.stringify(active));
+}
 function historyFor(code,name){
   const key=code||name, arr=[];
   purchases.forEach(p=>p.items.forEach(x=>{
@@ -138,14 +158,84 @@ function update(){
  renderHistory();renderPrices();
 }
 $('start').onclick=()=>{let store=$('store').value.trim();if(!store){$('store').focus();return}active={id:Date.now(),store,started:new Date().toISOString(),items:[]};save();update()};
-function lookup(){let c=$('ean').value.trim(),n=products[c]||demo[c];$('manual').classList.add('hidden');foundName='';currentKey='';if(!c){$('lookup').textContent='Digite ou escaneie o código.';$('priceHint').classList.add('hidden');return}if(n){foundName=n;$('lookup').textContent='Encontrado: '+n;showPriceHint(c,n)}else{$('lookup').textContent='Código novo. Digite o nome uma vez:';$('manual').classList.remove('hidden');$('priceHint').classList.add('hidden');$('name').focus()}}
+function normalizeName(p){
+ const name=(p.product_name_pt||p.product_name||p.generic_name_pt||p.generic_name||'').trim();
+ const brand=(p.brands||'').split(',')[0].trim();
+ const qty=(p.quantity||'').trim();
+ if(!name)return '';
+ let out=name;
+ if(brand && !name.toLowerCase().includes(brand.toLowerCase())) out += ' - '+brand;
+ if(qty && !out.toLowerCase().includes(qty.toLowerCase())) out += ' '+qty;
+ return out.replace(/\s+/g,' ').trim();
+}
+async function fetchJSON(url,ms=5000){
+ const ctrl=new AbortController(),to=setTimeout(()=>ctrl.abort(),ms);
+ try{
+   const r=await fetch(url,{signal:ctrl.signal,cache:'no-store'});
+   if(!r.ok)return null;
+   return await r.json();
+ }catch(e){return null}finally{clearTimeout(to)}
+}
+async function queryOpenFacts(code){
+ // Uma chamada com product_type=all pode redirecionar entre Food/Beauty/Products/Pet.
+ const urls=[
+   ['Open Facts','https://world.openfoodfacts.org/api/v2/product/'+encodeURIComponent(code)+'.json?fields=code,product_name,product_name_pt,generic_name,generic_name_pt,brands,quantity&product_type=all'],
+   ['Open Products Facts','https://world.openproductsfacts.org/api/v2/product/'+encodeURIComponent(code)+'.json?fields=code,product_name,product_name_pt,generic_name,generic_name_pt,brands,quantity'],
+   ['Open Beauty Facts','https://world.openbeautyfacts.org/api/v2/product/'+encodeURIComponent(code)+'.json?fields=code,product_name,product_name_pt,generic_name,generic_name_pt,brands,quantity'],
+   ['Open Pet Food Facts','https://world.openpetfoodfacts.org/api/v2/product/'+encodeURIComponent(code)+'.json?fields=code,product_name,product_name_pt,generic_name,generic_name_pt,brands,quantity']
+ ];
+ for(const [source,url] of urls){
+   const j=await fetchJSON(url);
+   if(j && (j.status===1 || j.product)){
+     const n=normalizeName(j.product||{});
+     if(n)return {name:n,source};
+   }
+ }
+ return null;
+}
+function setSource(s){
+ const el=$('lookupSource');
+ if(s){el.textContent=s;el.classList.remove('hidden')}
+ else{el.textContent='';el.classList.add('hidden')}
+}
+async function lookup(){
+ let c=$('ean').value.replace(/\D/g,'').trim(),seq=++lookupSeq;
+ $('ean').value=c;$('manual').classList.add('hidden');foundName='';foundSource='';currentKey='';setSource('');
+ if(!c){$('lookup').textContent='Digite ou escaneie o código.';$('priceHint').classList.add('hidden');return}
+ if(c.length<8){$('lookup').textContent='Código muito curto.';$('priceHint').classList.add('hidden');return}
+
+ if(products[c]){
+   foundName=typeof products[c]==='string'?products[c]:products[c].name;
+   foundSource='Seu cadastro';
+   $('lookup').textContent='Encontrado: '+foundName;setSource(foundSource);showPriceHint(c,foundName);return;
+ }
+ if(verifiedSeed[c]){
+   foundName=verifiedSeed[c].name;foundSource=verifiedSeed[c].source;
+   products[c]={name:foundName,source:foundSource};save();
+   $('lookup').textContent='Encontrado: '+foundName;setSource(foundSource);showPriceHint(c,foundName);return;
+ }
+
+ $('lookup').innerHTML='<span class="loading"></span>Consultando bases de produtos...';
+ $('priceHint').classList.add('hidden');
+ const remote=await queryOpenFacts(c);
+ if(seq!==lookupSeq)return;
+ if(remote){
+   foundName=remote.name;foundSource=remote.source;
+   products[c]={name:foundName,source:foundSource};save();
+   $('lookup').textContent='Encontrado: '+foundName;setSource(foundSource);showPriceHint(c,foundName);
+ }else{
+   $('lookup').textContent='Não encontrei automaticamente. Digite o nome uma vez:';
+   setSource('Será salvo no seu cadastro');
+   $('manual').classList.remove('hidden');$('name').focus();
+ }
+}
 $('find').onclick=lookup;$('ean').onkeydown=e=>{if(e.key==='Enter')lookup()};
 $('price').addEventListener('input',updateCurrentPriceComparison);$('kgprice').addEventListener('input',updateCurrentPriceComparison);
 $('weightToggle').onchange=()=>{$('unit').classList.toggle('hidden',$('weightToggle').checked);$('weight').classList.toggle('hidden',!$('weightToggle').checked);updateCurrentPriceComparison()};
-$('add').onclick=()=>{if(!active)return;let code=$('ean').value.trim(),name=foundName||$('name').value.trim();if(!name){$('msg').textContent='Identifique o produto.';return}if(!foundName&&code)products[code]=name;let w=$('weightToggle').checked,item;
+$('add').onclick=()=>{if(!active)return;let code=$('ean').value.trim(),name=foundName||$('name').value.trim();if(!name){$('msg').textContent='Identifique o produto.';return}if(!foundName&&code)products[code]={name,source:'Cadastrado por você'};let w=$('weightToggle').checked,item;
 if(w){let p=num($('kgprice').value),kg=num($('kg').value);if(p<=0){$('msg').textContent='Informe o preço/kg.';return}item={code,name,byWeight:true,price:p,kg,pending:kg<=0,total:kg>0?p*kg:0}}
 else{let p=num($('price').value),q=Math.max(1,parseInt($('qty').value)||1);if(p<=0){$('msg').textContent='Informe o preço.';return}item={code,name,byWeight:false,price:p,qty:q,pending:false,total:p*q}}
-active.items.push(item);save();['ean','name','price','kgprice','kg'].forEach(i=>$(i).value='');$('qty').value=1;$('manual').classList.add('hidden');$('lookup').textContent='';$('priceHint').classList.add('hidden');foundName='';currentKey='';renderCart()};
+active.items.push(item);save();['ean','name','price','kgprice','kg'].forEach(i=>$(i).value='');$('qty').value=1;$('manual').classList.add('hidden');$('lookup').textContent='';setSource('');$('priceHint').classList.add('hidden');foundName='';foundSource='';currentKey='';renderCart()};
 function renderCart(){if(!active)return;let b=$('cart');b.innerHTML='';active.items.forEach((x,i)=>{let r=document.createElement('div');r.className='item';r.innerHTML=`<div><div class="name">${x.name}</div><div class="muted">${x.byWeight?(x.pending?money(x.price)+'/kg • peso pendente':money(x.price)+'/kg • '+x.kg+' kg'):x.qty+' × '+money(x.price)}</div></div><div class="right"><div class="name">${x.pending?'Pendente':money(x.total)}</div></div>`;let d=document.createElement('button');d.className='danger';d.textContent='×';d.onclick=()=>{active.items.splice(i,1);save();renderCart()};r.lastChild.appendChild(d);b.appendChild(r)});$('total').textContent=money(active.items.reduce((s,x)=>s+(x.total||0),0))}
 $('finish').onclick=()=>{if(!active||!active.items.length)return;active.finished=new Date().toISOString();active.estimatedTotal=active.items.reduce((s,x)=>s+(x.total||0),0);purchases.unshift(active);active=null;save();update();document.querySelector('[data-tab="receipt"]').click()};
 $('cancel').onclick=()=>{if(confirm('Cancelar esta compra?')){active=null;save();update()}};
@@ -163,7 +253,7 @@ function showChart(x){
 }
 $('closeChart').onclick=()=>$('chartCard').classList.add('hidden');
 $('compare').onclick=()=>{if(!purchases.length){$('comparison').textContent='Finalize uma compra primeiro.';return}let p=purchases[0],t=num($('receiptTotal').value),key=$('key').value.replace(/\D/g,'');if(key&&key.length!==44){$('comparison').innerHTML='<span style="color:var(--r)">A chave precisa ter 44 dígitos.</span>';return}p.receiptTotal=t||null;p.discount=num($('discount').value);p.qr=$('qr').value.trim();p.key=key;save();let d=t-p.estimatedTotal;$('comparison').innerHTML=t?`<div class="big">${Math.abs(d)<.01?'✓ Valores conferem':(d>0?money(d)+' acima do carrinho':money(Math.abs(d))+' abaixo do carrinho')}</div><div class="muted">Carrinho: ${money(p.estimatedTotal)} • Cupom: ${money(t)}</div>`:'Cupom salvo.';renderHistory()};
-$('backup').onclick=()=>{let blob=new Blob([JSON.stringify({date:new Date().toISOString(),products,purchases},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='backup-carrinho-scanner-v4.json';a.click()};
+$('backup').onclick=()=>{let blob=new Blob([JSON.stringify({date:new Date().toISOString(),products,purchases},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='backup-carrinho-scanner-v5.json';a.click()};
 document.querySelectorAll('.tab').forEach(x=>x.onclick=()=>{document.querySelectorAll('.tab').forEach(y=>y.classList.remove('active'));document.querySelectorAll('.panel').forEach(y=>y.classList.add('hidden'));x.classList.add('active');$(x.dataset.tab).classList.remove('hidden');update()});
 async function stop(which){let s=which==='qr'?qstream:stream,t=which==='qr'?qtimer:timer;if(t)clearInterval(t);if(s)s.getTracks().forEach(x=>x.stop());if(which==='qr'){qstream=null;qtimer=null;$('qrCamBox').classList.add('hidden')}else{stream=null;timer=null;$('camBox').classList.add('hidden')}}
 async function camera(mode){let status=mode==='qr'?$('comparison'):$('msg');if(!('BarcodeDetector'in window)){status.textContent='Leitura por câmera não disponível neste navegador.';return}try{let fm=await BarcodeDetector.getSupportedFormats(),wanted=mode==='qr'?['qr_code']:['ean_13','ean_8','upc_a','upc_e'],formats=wanted.filter(x=>fm.includes(x)),det=new BarcodeDetector({formats:formats.length?formats:fm}),s=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false}),v=mode==='qr'?$('qrVideo'):$('video');v.srcObject=s;await v.play();if(mode==='qr'){qstream=s;$('qrCamBox').classList.remove('hidden')}else{stream=s;$('camBox').classList.remove('hidden')}let ti=setInterval(async()=>{try{let c=await det.detect(v);if(c.length){if(mode==='qr'){$('qr').value=c[0].rawValue;let m=c[0].rawValue.match(/\d{44}/);if(m)$('key').value=m[0];await stop('qr');$('comparison').textContent='QR lido.'}else{$('ean').value=c[0].rawValue;await stop('product');lookup()}}}catch(e){}},400);if(mode==='qr')qtimer=ti;else timer=ti}catch(e){status.textContent='Não foi possível abrir a câmera.'}}

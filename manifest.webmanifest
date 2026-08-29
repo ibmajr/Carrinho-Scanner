@@ -1,6 +1,6 @@
 {
-  "name": "Carrinho Scanner V4",
-  "short_name": "Carrinho",
+  "name": "Carrinho Scanner V5",
+  "short_name": "Carrinho Scanner",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#f5f7fa",
@@ -16,5 +16,6 @@
       "sizes": "512x512",
       "type": "image/png"
     }
-  ]
+  ],
+  "description": "Scanner de compras com identificação automática por código de barras e histórico de preços."
 }
