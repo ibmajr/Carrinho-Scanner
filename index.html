@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#1769ff"><link rel="manifest" href="manifest.webmanifest">
-<title>Carrinho Scanner V6</title>
+<title>Carrinho Scanner V8</title>
 <style>
 :root{--b:#1769ff;--bg:#f5f7fa;--c:#fff;--t:#17191c;--m:#69727d;--l:#dde3ea;--g:#18763b;--r:#bd2525}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;color:var(--t)}
@@ -22,10 +22,18 @@ canvas{width:100%;height:220px;background:#fff;border:1px solid var(--l);border-
 .loading{display:inline-block;width:14px;height:14px;border:2px solid #cfd8e3;border-top-color:var(--b);border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px;margin-right:5px}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media(max-width:520px){.grid{grid-template-columns:1fr}.stack{flex-direction:column;align-items:stretch}.kpis{grid-template-columns:1fr}}
-.cmp{border:1px solid var(--l);border-radius:10px;padding:9px;margin-top:7px}.cmp.ok{border-left:5px solid #2e9b55}.cmp.bad{border-left:5px solid #c83b3b}.cmp.warn{border-left:5px solid #d49a21}.cmp small{display:block;color:#667;margin-top:3px}</style>
+.cmp{border:1px solid var(--l);border-radius:10px;padding:9px;margin-top:7px}.cmp.ok{border-left:5px solid #2e9b55}.cmp.bad{border-left:5px solid #c83b3b}.cmp.warn{border-left:5px solid #d49a21}.cmp small{display:block;color:#667;margin-top:3px}
+.scanok{background:#edf8ef;color:#18763b;border-radius:12px;padding:10px;margin-top:8px;font-weight:750}
+.scanwarn{background:#fff7df;color:#775400;border-radius:12px;padding:10px;margin-top:8px}
+.summaryGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
+.summaryBox{border:1px solid var(--l);border-radius:12px;padding:10px;text-align:center}
+.summaryBox .n{font-size:24px;font-weight:850}
+.noteMeta{background:#f7f9fc;border:1px solid var(--l);border-radius:12px;padding:10px;margin-top:10px}
+@media(max-width:520px){.summaryGrid{grid-template-columns:1fr 1fr 1fr}}
+</style>
 </head>
 <body><div class="app">
-<h1>Carrinho Scanner</h1><div class="sub">V6 • produtos + conferência detalhada do cupom</div>
+<h1>Carrinho Scanner</h1><div class="sub">V8 • leitura contínua + conferência automática da NFC-e</div>
 
 <div id="activeBanner" class="banner hidden">
  <div class="muted">Compra em andamento</div><div id="activeTitle" class="big"></div><div id="activeDate" class="muted"></div>
@@ -75,17 +83,42 @@ canvas{width:100%;height:220px;background:#fff;border:1px solid var(--l);border-
 
 <section id="receipt" class="panel hidden">
 <div class="card">
-<strong>Conferência da NFC-e</strong><div class="muted">Preferência: QR Code. Se não ler, use a chave de 44 dígitos.</div>
-<button id="scanQR" class="secondary" style="width:100%;margin-top:10px">📷 Escanear QR da NFC-e</button>
-<div id="qrCamBox" class="hidden" style="margin-top:10px"><video id="qrVideo" playsinline muted></video><button id="stopQR" class="secondary" style="width:100%;margin-top:7px">Fechar câmera</button></div>
-<label>Link / conteúdo do QR</label><input id="qr">
-<label>Chave de acesso (44 dígitos)</label><input id="key" inputmode="numeric" maxlength="60" placeholder="4126...">
-<div class="grid"><div><label>Total do cupom</label><input id="receiptTotal" inputmode="decimal" placeholder="R$ 0,00"></div><div><label>Desconto</label><input id="discount" inputmode="decimal" placeholder="R$ 0,00"></div></div>
-<button id="compare" class="primary" style="width:100%;margin-top:10px">Salvar cupom e comparar</button><div style="margin-top:12px"><strong>Conferência por produto</strong>
-<div class="muted">Confirme o cupom e confira preço e quantidade item por item.</div>
-<div class="row" style="margin-top:8px"><button id="confirmReceipt" class="secondary">✓ Confirmar cupom</button><button id="addReceiptItem" class="secondary">+ Item do cupom</button></div>
-<div id="receiptStatus" class="muted" style="margin-top:8px"></div><div id="receiptItems"></div><div id="itemCompare"></div></div>
-<div id="comparison" style="margin-top:10px"></div>
+  <strong>Conferência automática da NFC-e</strong>
+  <div class="muted">Escaneie o QR Code. A chave é reconhecida automaticamente e o app tenta carregar os itens da nota para comparar com a compra.</div>
+
+  <button id="scanQR" class="primary" style="width:100%;margin-top:10px">📷 Escanear QR da NFC-e</button>
+  <div id="qrCamBox" class="hidden" style="margin-top:10px">
+    <video id="qrVideo" playsinline muted></video>
+    <button id="stopQR" class="secondary" style="width:100%;margin-top:7px">Fechar câmera</button>
+  </div>
+
+  <div id="receiptStatus" class="muted" style="margin-top:10px"></div>
+
+  <details style="margin-top:10px">
+    <summary class="muted">Dados da nota / preenchimento de emergência</summary>
+    <label>Link / conteúdo do QR</label><input id="qr">
+    <label>Chave de acesso</label><input id="key" inputmode="numeric" maxlength="60" placeholder="Reconhecida automaticamente pelo QR">
+    <div class="grid">
+      <div><label>Total do cupom</label><input id="receiptTotal" inputmode="decimal" placeholder="R$ 0,00"></div>
+      <div><label>Desconto</label><input id="discount" inputmode="decimal" placeholder="R$ 0,00"></div>
+    </div>
+    <div class="row stack" style="margin-top:8px">
+      <button id="retryReceipt" class="secondary grow">Tentar carregar novamente</button>
+      <button id="openOfficial" class="secondary grow">Abrir nota oficial</button>
+    </div>
+  </details>
+
+  <div id="noteMeta" class="noteMeta hidden"></div>
+
+  <div id="summary" class="hidden">
+    <div class="summaryGrid">
+      <div class="summaryBox"><div class="muted">Total de itens</div><div class="n" id="sumTotal">0</div></div>
+      <div class="summaryBox"><div class="muted">Conferidos</div><div class="n good" id="sumOk">0</div></div>
+      <div class="summaryBox"><div class="muted">Divergências</div><div class="n bad" id="sumBad">0</div></div>
+    </div>
+    <div id="comparison"></div>
+    <button id="pdfReport" class="primary" style="width:100%;margin-top:12px">📄 Gerar PDF da conferência</button>
+  </div>
 </div>
 </section>
 
@@ -110,11 +143,12 @@ canvas{width:100%;height:220px;background:#fff;border:1px solid var(--l);border-
 const $=x=>document.getElementById(x), money=n=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(n||0);
 const num=v=>{let s=String(v||'').trim();if(!s)return 0;if(s.includes(','))s=s.replace(/\./g,'').replace(',','.');let n=Number(s);return Number.isFinite(n)?n:0};
 const fmt=s=>new Date(s).toLocaleString('pt-BR');
+const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]));
 // V5 migra automaticamente os dados da V4 para não perder histórico.
 let products=JSON.parse(localStorage.getItem('v6_products')||localStorage.getItem('v5_products')||localStorage.getItem('v4_products')||'{}'),
     purchases=JSON.parse(localStorage.getItem('v6_purchases')||localStorage.getItem('v5_purchases')||localStorage.getItem('v4_purchases')||'[]'),
     active=JSON.parse(localStorage.getItem('v6_active')||localStorage.getItem('v5_active')||localStorage.getItem('v4_active')||'null'),
-    foundName='',foundSource='',stream=null,timer=null,qstream=null,qtimer=null,currentKey='',lookupSeq=0;
+    foundName='',foundSource='',stream=null,timer=null,qstream=null,qtimer=null,currentKey='',lookupSeq=0,scannerBusy=false,scanLockedCode='',lastComparison=null,lastReceipt=null;
 
 const verifiedSeed={
  "7896004704623":{name:"Maleato de Dexclorfeniramina + Betametasona EMS 120 ml",source:"Cadastro verificado"},
@@ -201,36 +235,69 @@ function setSource(s){
  if(s){el.textContent=s;el.classList.remove('hidden')}
  else{el.textContent='';el.classList.add('hidden')}
 }
+async function resolveProduct(code){
+ if(products[code]){
+   return {name:typeof products[code]==='string'?products[code]:products[code].name,source:'Seu cadastro'};
+ }
+ if(verifiedSeed[code]){
+   const r=verifiedSeed[code];products[code]={name:r.name,source:r.source};save();
+   return {name:r.name,source:r.source};
+ }
+ const remote=await queryOpenFacts(code);
+ if(remote){products[code]={name:remote.name,source:remote.source};save();return remote}
+ return null;
+}
 async function lookup(){
  let c=$('ean').value.replace(/\D/g,'').trim(),seq=++lookupSeq;
  $('ean').value=c;$('manual').classList.add('hidden');foundName='';foundSource='';currentKey='';setSource('');
  if(!c){$('lookup').textContent='Digite ou escaneie o código.';$('priceHint').classList.add('hidden');return}
  if(c.length<8){$('lookup').textContent='Código muito curto.';$('priceHint').classList.add('hidden');return}
-
- if(products[c]){
-   foundName=typeof products[c]==='string'?products[c]:products[c].name;
-   foundSource='Seu cadastro';
-   $('lookup').textContent='Encontrado: '+foundName;setSource(foundSource);showPriceHint(c,foundName);return;
- }
- if(verifiedSeed[c]){
-   foundName=verifiedSeed[c].name;foundSource=verifiedSeed[c].source;
-   products[c]={name:foundName,source:foundSource};save();
-   $('lookup').textContent='Encontrado: '+foundName;setSource(foundSource);showPriceHint(c,foundName);return;
- }
-
- $('lookup').innerHTML='<span class="loading"></span>Consultando bases de produtos...';
- $('priceHint').classList.add('hidden');
- const remote=await queryOpenFacts(c);
+ $('lookup').innerHTML='<span class="loading"></span>Identificando produto...';
+ const r=await resolveProduct(c);
  if(seq!==lookupSeq)return;
- if(remote){
-   foundName=remote.name;foundSource=remote.source;
-   products[c]={name:foundName,source:foundSource};save();
+ if(r){
+   foundName=r.name;foundSource=r.source;
    $('lookup').textContent='Encontrado: '+foundName;setSource(foundSource);showPriceHint(c,foundName);
  }else{
    $('lookup').textContent='Não encontrei automaticamente. Digite o nome uma vez:';
    setSource('Será salvo no seu cadastro');
    $('manual').classList.remove('hidden');$('name').focus();
  }
+}
+function addScannedToCart(code,name){
+ if(!active)return;
+ let existing=active.items.find(x=>!x.byWeight && x.code===code);
+ if(existing){
+   existing.qty=(Number(existing.qty)||1)+1;
+   existing.total=(Number(existing.price)||0)*existing.qty;
+ }else{
+   active.items.push({code,name,byWeight:false,price:0,qty:1,pending:false,pendingPrice:true,total:0});
+ }
+ save();renderCart();
+}
+async function handleScannedProduct(code){
+ if(scannerBusy||!active)return;
+ scannerBusy=true;
+ $('msg').textContent='Identificando '+code+'...';
+ try{
+   const r=await resolveProduct(code);
+   if(r){
+     addScannedToCart(code,r.name);
+     $('msg').innerHTML='✓ <b>'+esc(r.name)+'</b> adicionado. Aponte para o próximo produto.';
+     $('ean').value='';foundName='';foundSource='';setSource('');
+   }else{
+     await stop('product');
+     const manualName=prompt('Produto não identificado. Digite o nome uma vez:','');
+     if(manualName&&manualName.trim()){
+       const n=manualName.trim();
+       products[code]={name:n,source:'Cadastrado por você'};save();
+       addScannedToCart(code,n);
+       $('msg').innerHTML='✓ <b>'+esc(n)+'</b> adicionado.';
+     }else{
+       $('msg').textContent='Produto não adicionado.';
+     }
+   }
+ }finally{scannerBusy=false}
 }
 $('find').onclick=lookup;$('ean').onkeydown=e=>{if(e.key==='Enter')lookup()};
 $('price').addEventListener('input',updateCurrentPriceComparison);$('kgprice').addEventListener('input',updateCurrentPriceComparison);
@@ -239,7 +306,7 @@ $('add').onclick=()=>{if(!active)return;let code=$('ean').value.trim(),name=foun
 if(w){let p=num($('kgprice').value),kg=num($('kg').value);if(p<=0){$('msg').textContent='Informe o preço/kg.';return}item={code,name,byWeight:true,price:p,kg,pending:kg<=0,total:kg>0?p*kg:0}}
 else{let p=num($('price').value),q=Math.max(1,parseInt($('qty').value)||1);if(p<=0){$('msg').textContent='Informe o preço.';return}item={code,name,byWeight:false,price:p,qty:q,pending:false,total:p*q}}
 active.items.push(item);save();['ean','name','price','kgprice','kg'].forEach(i=>$(i).value='');$('qty').value=1;$('manual').classList.add('hidden');$('lookup').textContent='';setSource('');$('priceHint').classList.add('hidden');foundName='';foundSource='';currentKey='';renderCart()};
-function renderCart(){if(!active)return;let b=$('cart');b.innerHTML='';active.items.forEach((x,i)=>{let r=document.createElement('div');r.className='item';r.innerHTML=`<div><div class="name">${x.name}</div><div class="muted">${x.byWeight?(x.pending?money(x.price)+'/kg • peso pendente':money(x.price)+'/kg • '+x.kg+' kg'):x.qty+' × '+money(x.price)}</div></div><div class="right"><div class="name">${x.pending?'Pendente':money(x.total)}</div></div>`;let d=document.createElement('button');d.className='danger';d.textContent='×';d.onclick=()=>{active.items.splice(i,1);save();renderCart()};r.lastChild.appendChild(d);b.appendChild(r)});$('total').textContent=money(active.items.reduce((s,x)=>s+(x.total||0),0))}
+function renderCart(){if(!active)return;let b=$('cart');b.innerHTML='';active.items.forEach((x,i)=>{let r=document.createElement('div');r.className='item';r.innerHTML=`<div><div class="name">${x.name}</div><div class="muted">${x.byWeight?(x.pending?money(x.price)+'/kg • peso pendente':money(x.price)+'/kg • '+x.kg+' kg'):(x.pendingPrice?x.qty+' un • preço será conferido pela nota':x.qty+' × '+money(x.price))}</div></div><div class="right"><div class="name">${(x.pending||x.pendingPrice)?'Registrado':money(x.total)}</div></div>`;let d=document.createElement('button');d.className='danger';d.textContent='×';d.onclick=()=>{active.items.splice(i,1);save();renderCart()};r.lastChild.appendChild(d);b.appendChild(r)});$('total').textContent=money(active.items.reduce((s,x)=>s+(x.total||0),0))}
 $('finish').onclick=()=>{if(!active||!active.items.length)return;active.finished=new Date().toISOString();active.estimatedTotal=active.items.reduce((s,x)=>s+(x.total||0),0);purchases.unshift(active);active=null;save();update();document.querySelector('[data-tab="receipt"]').click()};
 $('cancel').onclick=()=>{if(confirm('Cancelar esta compra?')){active=null;save();update()}};
 function renderHistory(){let b=$('historyList');b.innerHTML='';if(!purchases.length){b.innerHTML='<div class="muted">Nenhuma compra salva.</div>';return}purchases.forEach(p=>{let r=document.createElement('div');r.className='item';r.innerHTML=`<div><div class="name">${p.store}</div><div class="muted">${fmt(p.started)} • ${p.items.length} produtos</div></div><div class="right"><div class="name">${money(p.receiptTotal??p.estimatedTotal)}</div><div class="muted">estimado ${money(p.estimatedTotal)}</div></div>`;b.appendChild(r)})}
@@ -255,19 +322,202 @@ function showChart(x){
  const rows=$('chartRows');rows.innerHTML='';x.a.slice().reverse().forEach(e=>{let r=document.createElement('div');r.className='item';r.innerHTML=`<div><div class="name">${fmt(e.date)}</div><div class="muted">${e.store}</div></div><div class="name">${money(e.price)}/${e.unit}</div>`;rows.appendChild(r)})
 }
 $('closeChart').onclick=()=>$('chartCard').classList.add('hidden');
-let receiptItems=[];
-function nm(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim()}
-function renderReceiptItems(){let b=$('receiptItems');b.innerHTML='';receiptItems.forEach((x,i)=>{let d=document.createElement('div');d.className='cmp';d.innerHTML='<b>'+esc(x.name)+'</b><small>'+(x.ean?'EAN '+x.ean+' • ':'')+'Qtd '+x.qty+' • R$ '+x.price.toFixed(2)+'</small>';b.appendChild(d)});compareItems()}
-function compareItems(){let o=$('itemCompare');o.innerHTML='';if(!receiptItems.length)return;let cart=(purchases[0]&&purchases[0].items)||[],used=new Set();receiptItems.forEach(r=>{let ix=-1;if(r.ean)ix=cart.findIndex((c,i)=>!used.has(i)&&c.code===r.ean);if(ix<0){let rn=nm(r.name);ix=cart.findIndex((c,i)=>!used.has(i)&&(nm(c.name).includes(rn)||rn.includes(nm(c.name))))}let d=document.createElement('div');if(ix<0){d.className='cmp warn';d.innerHTML='<b>⚠ Só no cupom: '+esc(r.name)+'</b>'}else{used.add(ix);let c=cart[ix],cp=Number(c.price||0),cq=Number(c.qty||1),ok=Math.abs(cp-r.price)<.011&&Math.abs(cq-r.qty)<.001;d.className='cmp '+(ok?'ok':'bad');d.innerHTML='<b>'+(ok?'✓ OK: ':'✕ DIVERGÊNCIA: ')+esc(c.name)+'</b><small>App: '+cq+' × R$ '+cp.toFixed(2)+' | Cupom: '+r.qty+' × R$ '+r.price.toFixed(2)+'</small>'}o.appendChild(d)});cart.forEach((c,i)=>{if(!used.has(i)){let d=document.createElement('div');d.className='cmp warn';d.innerHTML='<b>⚠ Só no app: '+esc(c.name)+'</b>';o.appendChild(d)}})}
-$('addReceiptItem').onclick=()=>{let e=(prompt('EAN (opcional):','')||'').replace(/\D/g,''),n=prompt('Produto:','');if(!n)return;let q=num(prompt('Quantidade:','1')),pr=num(prompt('Preço unitário no cupom:',''));receiptItems.push({ean:e,name:n,qty:q||1,price:pr});renderReceiptItems()};
-$('confirmReceipt').onclick=()=>{let q=$('qr').value.trim(),k=$('key').value.replace(/\D/g,'');if(!q&&!k){$('receiptStatus').textContent='Leia o QR ou informe a chave.';return}$('receiptStatus').textContent='✓ Cupom confirmado.';compareItems()};
+function normTxt(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim()}
+function usefulTokens(s){
+ const stop=new Set(['de','da','do','das','dos','com','sem','para','und','un','kg','gr','g','ml','lt','l']);
+ return normTxt(s).split(' ').filter(x=>x.length>1&&!stop.has(x));
+}
+function nameScore(a,b){
+ const A=usefulTokens(a),B=usefulTokens(b);if(!A.length||!B.length)return 0;
+ const as=normTxt(a),bs=normTxt(b);if(as===bs)return 1;
+ if((as.includes(bs)||bs.includes(as))&&Math.min(as.length,bs.length)>=5)return .92;
+ const sb=new Set(B),common=A.filter(x=>sb.has(x)).length;
+ return common/Math.max(1,Math.min(A.length,B.length));
+}
+function parseKey(raw){
+ const s=decodeURIComponent(String(raw||'').replace(/\+/g,'%20'));
+ const pm=s.match(/[?&]p=(\d{44})(?:\||%7C|$)/i);if(pm)return pm[1];
+ const any=s.replace(/\s/g,'').match(/\d{44}/);return any?any[0]:'';
+}
+function safeNumber(v){return num(String(v||'').replace(/\s/g,''))}
+function parseReceiptText(text){
+ const t=String(text||'').replace(/\u00a0/g,' ').replace(/\r/g,'');
+ const items=[];
+ const re=/([^\n]+?)\s*\(Código:\s*([^)]+)\)\s*Qtde\.:\s*([\d.,]+)\s*UN:\s*([^\s]+)\s*Vl\.\s*Unit\.:\s*([\d.,]+)\s*(?:\||)\s*Vl\.\s*Total\s*([\d.,]+)/gi;
+ let m;
+ while((m=re.exec(t))){
+   items.push({name:m[1].trim(),code:m[2].trim(),qty:safeNumber(m[3]),unit:m[4].trim(),unitPrice:safeNumber(m[5]),total:safeNumber(m[6])});
+ }
+ const total=(t.match(/Valor a pagar R\$\s*:\s*([\d.,]+)/i)||[])[1];
+ const count=(t.match(/Qtd\.\s*total de itens\s*:\s*(\d+)/i)||[])[1];
+ const info=t.match(/Número:\s*([0-9]+)\s*Série:\s*([0-9]+)\s*Emissão:\s*([0-9\/]+\s+[0-9:]+)/i);
+ const cnpj=(t.match(/CNPJ:\s*([0-9./-]+)/i)||[])[1]||'';
+ const lines=t.split('\n').map(x=>x.trim()).filter(Boolean);
+ let issuer='';
+ const idx=lines.findIndex(x=>/DOCUMENTO AUXILIAR DA NOTA FISCAL/i.test(x));
+ if(idx>=0&&lines[idx+1])issuer=lines[idx+1];
+ return {items,total:safeNumber(total),declaredCount:Number(count||items.length),number:info?info[1]:'',series:info?info[2]:'',issuedAt:info?info[3]:'',cnpj,issuer};
+}
+function matchReceipt(cart,receiptItems){
+ const used=new Set(),rows=[];
+ receiptItems.forEach(r=>{
+   let ix=-1,best=0;
+   if(r.code){
+     ix=cart.findIndex((c,i)=>!used.has(i)&&c.code&&String(c.code)===String(r.code));
+   }
+   if(ix<0){
+     cart.forEach((c,i)=>{if(used.has(i))return;const s=nameScore(c.name,r.name);if(s>best){best=s;ix=i}});
+     if(best<.42)ix=-1;
+   }
+   if(ix<0){
+     rows.push({status:'divergence',name:r.name,reasons:['Produto da nota não foi registrado durante a compra'],receipt:r});
+     return;
+   }
+   used.add(ix);const c=cart[ix],reasons=[];
+   const expectedQty=c.byWeight?(Number(c.kg)>0?Number(c.kg):null):Number(c.qty||1);
+   if(expectedQty!==null&&Number.isFinite(expectedQty)&&Math.abs(expectedQty-Number(r.qty||0))>.001){
+     reasons.push('Quantidade diferente: compra '+expectedQty+' / nota '+r.qty);
+   }
+   const cp=Number(c.price||0);
+   if(cp>0&&Number(r.unitPrice)>=0&&Math.abs(cp-Number(r.unitPrice))>.011){
+     reasons.push('Preço diferente: compra '+money(cp)+' / nota '+money(r.unitPrice));
+   }
+   rows.push({status:reasons.length?'divergence':'ok',name:c.name,reasons,cart:c,receipt:r});
+ });
+ cart.forEach((c,i)=>{
+   if(!used.has(i))rows.push({status:'divergence',name:c.name,reasons:['Produto registrado durante a compra não aparece na nota'],cart:c});
+ });
+ return rows;
+}
+function noteHtml(meta,key){
+ const bits=[];
+ if(meta.issuer)bits.push('<b>'+esc(meta.issuer)+'</b>');
+ if(meta.cnpj)bits.push('CNPJ: '+esc(meta.cnpj));
+ if(meta.number)bits.push('NFC-e nº '+esc(meta.number)+(meta.series?' • Série '+esc(meta.series):''));
+ if(meta.issuedAt)bits.push('Emissão: '+esc(meta.issuedAt));
+ if(key)bits.push('Chave: '+esc(key));
+ if(meta.total>0)bits.push('Total da nota: '+money(meta.total));
+ return bits.join('<br>');
+}
+function renderComparison(p,meta,rows,key){
+ lastComparison={purchase:p,receipt:meta,rows,key};
+ lastReceipt=meta;
+ const ok=rows.filter(x=>x.status==='ok').length,bad=rows.length-ok;
+ $('summary').classList.remove('hidden');
+ $('sumTotal').textContent=rows.length;$('sumOk').textContent=ok;$('sumBad').textContent=bad;
+ $('noteMeta').classList.remove('hidden');$('noteMeta').innerHTML=noteHtml(meta,key);
+ const box=$('comparison');box.innerHTML='';
+ rows.forEach(x=>{
+   const d=document.createElement('div');d.className='cmp '+(x.status==='ok'?'ok':'bad');
+   let extra='';
+   if(x.receipt)extra='<small>Nota: '+esc(x.receipt.name)+' • Qtd '+x.receipt.qty+(x.receipt.unitPrice>=0?' • '+money(x.receipt.unitPrice):'')+'</small>';
+   d.innerHTML='<b>'+(x.status==='ok'?'✓ ':'⚠ ')+esc(x.name)+'</b>'+extra+
+     (x.reasons.length?'<small><b>Motivo:</b> '+x.reasons.map(esc).join('<br>')+'</small>':'<small>Produto conferido.</small>');
+   box.appendChild(d);
+ });
+ p.qr=$('qr').value.trim();p.key=key;p.receiptTotal=meta.total||null;p.receiptItems=meta.items;p.receiptMeta=meta;
+ p.conference={at:new Date().toISOString(),ok,bad,total:rows.length,rows};save();renderHistory();
+}
+function normalizeOfficialUrl(raw){
+ let u=String(raw||'').trim();
+ if(!u)return '';
+ if(/^http:\/\//i.test(u))u='https://'+u.slice(7);
+ return u;
+}
+async function loadReceiptAutomatically(raw){
+ if(!purchases.length){$('receiptStatus').textContent='Finalize a compra antes de ler o cupom.';return}
+ const url=normalizeOfficialUrl(raw),key=parseKey(raw);
+ $('qr').value=raw;if(key)$('key').value=key;
+ $('receiptStatus').innerHTML='<span class="loading"></span>QR reconhecido. Carregando itens da NFC-e...';
+ const p=purchases[0];
+ try{
+   const r=await fetch(url,{method:'GET',mode:'cors',cache:'no-store',credentials:'omit'});
+   if(!r.ok)throw new Error('HTTP '+r.status);
+   const html=await r.text(),doc=new DOMParser().parseFromString(html,'text/html');
+   const text=(doc.body&&doc.body.innerText)||doc.documentElement.textContent||'';
+   const meta=parseReceiptText(text);
+   if(!meta.items.length)throw new Error('Itens não encontrados na resposta');
+   const rows=matchReceipt(p.items||[],meta.items);
+   if(meta.total)$('receiptTotal').value=meta.total.toFixed(2).replace('.',',');
+   $('receiptStatus').innerHTML='✓ Nota carregada automaticamente. Conferência concluída.';
+   renderComparison(p,meta,rows,key);
+ }catch(e){
+   p.qr=raw;p.key=key;save();
+   $('receiptStatus').innerHTML='⚠ QR e chave reconhecidos, mas o site oficial não permitiu que este app carregasse os itens automaticamente. Isso pode ocorrer por bloqueio de acesso entre sites (CORS). Use “Abrir nota oficial” para conferir a consulta.';
+   $('noteMeta').classList.remove('hidden');
+   $('noteMeta').innerHTML=(key?'Chave reconhecida: '+esc(key):'QR reconhecido.');
+ }
+}
+async function processQR(raw){
+ if(!raw)return;
+ await stop('qr');
+ await loadReceiptAutomatically(raw);
+}
+$('retryReceipt').onclick=()=>{const raw=$('qr').value.trim();if(raw)loadReceiptAutomatically(raw)};
+$('openOfficial').onclick=()=>{const raw=normalizeOfficialUrl($('qr').value.trim());if(raw)window.open(raw,'_blank','noopener')};
+$('pdfReport').onclick=()=>{
+ if(!lastComparison)return;
+ const {purchase:p,receipt:r,rows,key}=lastComparison;
+ const ok=rows.filter(x=>x.status==='ok').length,bad=rows.length-ok;
+ const itemRows=rows.map(x=>`<tr><td>${x.status==='ok'?'✓':'⚠'}</td><td>${esc(x.name)}</td><td>${x.status==='ok'?'Conferido':x.reasons.map(esc).join('<br>')}</td></tr>`).join('');
+ const noteItems=(r.items||[]).map(x=>`<tr><td>${esc(x.name)}</td><td>${x.qty}</td><td>${money(x.unitPrice)}</td><td>${money(x.total)}</td></tr>`).join('');
+ const w=window.open('','_blank');
+ if(!w){alert('Permita pop-ups para gerar o PDF.');return}
+ w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Conferência NFC-e</title><style>
+ body{font-family:Arial,sans-serif;color:#111;margin:28px;font-size:12px}h1{font-size:20px}h2{font-size:15px;margin-top:22px}
+ table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border:1px solid #bbb;padding:6px;text-align:left;vertical-align:top}
+ .k{display:flex;gap:14px;margin:14px 0}.k div{border:1px solid #bbb;padding:8px;min-width:110px}.bad{font-weight:bold}
+ @media print{button{display:none}body{margin:12mm}}</style></head><body>
+ <h1>Relatório de Conferência da Compra</h1>
+ <b>Mercado:</b> ${esc(p.store)}<br><b>Compra iniciada:</b> ${esc(fmt(p.started))}<br>
+ ${r.issuer?'<b>Emitente:</b> '+esc(r.issuer)+'<br>':''}${r.cnpj?'<b>CNPJ:</b> '+esc(r.cnpj)+'<br>':''}
+ ${r.number?'<b>NFC-e:</b> '+esc(r.number)+' • Série '+esc(r.series)+'<br>':''}${r.issuedAt?'<b>Emissão:</b> '+esc(r.issuedAt)+'<br>':''}
+ ${key?'<b>Chave:</b> '+esc(key)+'<br>':''}<b>Total da nota:</b> ${money(r.total||0)}
+ <div class="k"><div>Total de itens<br><b>${rows.length}</b></div><div>Conferidos<br><b>${ok}</b></div><div>Divergências<br><b>${bad}</b></div></div>
+ <h2>Resultado da conferência</h2><table><tr><th></th><th>Produto</th><th>Resultado / divergência</th></tr>${itemRows}</table>
+ <h2>Produtos da NFC-e</h2><table><tr><th>Produto</th><th>Qtd.</th><th>Valor unit.</th><th>Valor total</th></tr>${noteItems}</table>
+ <p>Gerado em ${esc(fmt(new Date().toISOString()))}</p>
+ <button onclick="window.print()">Salvar / imprimir PDF</button>
+ <script>setTimeout(()=>window.print(),400)<\/script></body></html>`);
+ w.document.close();
+};
 
-$('compare').onclick=()=>{if(!purchases.length){$('comparison').textContent='Finalize uma compra primeiro.';return}let p=purchases[0],t=num($('receiptTotal').value),key=$('key').value.replace(/\D/g,'');if(key&&key.length!==44){$('comparison').innerHTML='<span style="color:var(--r)">A chave precisa ter 44 dígitos.</span>';return}p.receiptTotal=t||null;p.discount=num($('discount').value);p.qr=$('qr').value.trim();p.key=key;save();let d=t-p.estimatedTotal;$('comparison').innerHTML=t?`<div class="big">${Math.abs(d)<.01?'✓ Valores conferem':(d>0?money(d)+' acima do carrinho':money(Math.abs(d))+' abaixo do carrinho')}</div><div class="muted">Carrinho: ${money(p.estimatedTotal)} • Cupom: ${money(t)}</div>`:'Cupom salvo.';renderHistory()};
 $('backup').onclick=()=>{let blob=new Blob([JSON.stringify({date:new Date().toISOString(),products,purchases},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='backup-carrinho-scanner-v6.json';a.click()};
 document.querySelectorAll('.tab').forEach(x=>x.onclick=()=>{document.querySelectorAll('.tab').forEach(y=>y.classList.remove('active'));document.querySelectorAll('.panel').forEach(y=>y.classList.add('hidden'));x.classList.add('active');$(x.dataset.tab).classList.remove('hidden');update()});
 async function stop(which){let s=which==='qr'?qstream:stream,t=which==='qr'?qtimer:timer;if(t)clearInterval(t);if(s)s.getTracks().forEach(x=>x.stop());if(which==='qr'){qstream=null;qtimer=null;$('qrCamBox').classList.add('hidden')}else{stream=null;timer=null;$('camBox').classList.add('hidden')}}
-async function camera(mode){let status=mode==='qr'?$('comparison'):$('msg');if(!('BarcodeDetector'in window)){status.textContent='Leitura por câmera não disponível neste navegador.';return}try{let fm=await BarcodeDetector.getSupportedFormats(),wanted=mode==='qr'?['qr_code']:['ean_13','ean_8','upc_a','upc_e'],formats=wanted.filter(x=>fm.includes(x)),det=new BarcodeDetector({formats:formats.length?formats:fm}),s=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false}),v=mode==='qr'?$('qrVideo'):$('video');v.srcObject=s;await v.play();if(mode==='qr'){qstream=s;$('qrCamBox').classList.remove('hidden')}else{stream=s;$('camBox').classList.remove('hidden')}let ti=setInterval(async()=>{try{let c=await det.detect(v);if(c.length){if(mode==='qr'){$('qr').value=c[0].rawValue;let m=c[0].rawValue.match(/\d{44}/);if(m)$('key').value=m[0];await stop('qr');$('comparison').textContent='QR lido.'}else{$('ean').value=c[0].rawValue;await stop('product');lookup()}}}catch(e){}},400);if(mode==='qr')qtimer=ti;else timer=ti}catch(e){status.textContent='Não foi possível abrir a câmera.'}}
-$('scan').onclick=()=>camera('product');$('stopCam').onclick=()=>stop('product');$('scanQR').onclick=()=>camera('qr');$('stopQR').onclick=()=>stop('qr');
+async function camera(mode){
+ let status=mode==='qr'?$('receiptStatus'):$('msg');
+ if(!('BarcodeDetector'in window)){status.textContent='Leitura por câmera não disponível neste navegador.';return}
+ try{
+   const fm=await BarcodeDetector.getSupportedFormats(),wanted=mode==='qr'?['qr_code']:['ean_13','ean_8','upc_a','upc_e'];
+   const formats=wanted.filter(x=>fm.includes(x)),det=new BarcodeDetector({formats:formats.length?formats:fm});
+   const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
+   const v=mode==='qr'?$('qrVideo'):$('video');v.srcObject=s;await v.play();
+   if(mode==='qr'){qstream=s;$('qrCamBox').classList.remove('hidden');status.textContent='Aponte para o QR Code da NFC-e.'}
+   else{stream=s;$('camBox').classList.remove('hidden');status.textContent='Scanner ativo. Aponte para um produto.'}
+   let ti=setInterval(async()=>{
+     try{
+       const c=await det.detect(v);
+       if(!c.length){if(mode==='product')scanLockedCode='';return}
+       const raw=String(c[0].rawValue||'').trim();
+       if(mode==='qr'){
+         if(scannerBusy)return;scannerBusy=true;
+         try{await processQR(raw)}finally{scannerBusy=false}
+       }else{
+         const code=raw.replace(/\D/g,'');
+         if(!code||scannerBusy||code===scanLockedCode)return;
+         scanLockedCode=code;
+         await handleScannedProduct(code);
+       }
+     }catch(e){}
+   },350);
+   if(mode==='qr')qtimer=ti;else timer=ti;
+ }catch(e){status.textContent='Não foi possível abrir a câmera.'}
+}
+$('scan').onclick=()=>camera('product');
+$('stopCam').onclick=()=>stop('product');
+$('scanQR').onclick=()=>camera('qr');
+$('stopQR').onclick=()=>stop('qr');
 if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js');update();
 })();
 </script></body></html>
