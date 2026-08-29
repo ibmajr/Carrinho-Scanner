@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#1769ff"><link rel="manifest" href="manifest.webmanifest">
-<title>Carrinho Scanner V13</title>
+<title>Carrinho Scanner V14</title>
 <style>
 :root{--b:#1769ff;--bg:#f5f7fa;--c:#fff;--t:#17191c;--m:#69727d;--l:#dde3ea;--g:#18763b;--r:#bd2525}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;color:var(--t)}
@@ -35,10 +35,21 @@ canvas{width:100%;height:220px;background:#fff;border:1px solid var(--l);border-
 .editActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .itemEdit{margin-top:7px}
 .backendStatus{padding:8px 10px;border-radius:10px;background:#f5f7fa;margin-top:8px;font-size:13px}
+
+.scanLaunch{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.scanSquare{min-height:88px;font-size:17px}
+.camMini{position:relative;max-width:390px;margin:10px auto}.camMini video{aspect-ratio:1.35/1;max-height:285px}
+.camClose{position:absolute;right:8px;top:8px;width:38px;height:38px;padding:0;border-radius:50%;background:#fff;color:#222;font-size:20px;box-shadow:0 2px 8px #0004}
+.sheet{position:fixed;inset:0;z-index:50;background:#0006;display:flex;align-items:flex-end;justify-content:center}
+.sheetCard{width:min(760px,100%);max-height:88vh;overflow:auto;background:#fff;border-radius:22px 22px 0 0;padding:16px 14px calc(18px + env(safe-area-inset-bottom));box-shadow:0 -8px 30px #0003}
+.sheetTitle{font-size:19px;font-weight:850;margin-bottom:4px}.qtyCtl{display:grid;grid-template-columns:52px 1fr 52px;gap:7px;align-items:center}
+.qtyCtl button{font-size:22px;padding:8px}.pending{background:#fff7df;border:1px solid #ecd48e;border-radius:12px;padding:9px;margin-top:8px}
+.promoBox{background:#f7f9fc;border:1px solid var(--l);border-radius:12px;padding:10px;margin-top:9px}
+@media(max-width:520px){.scanLaunch{grid-template-columns:1fr 1fr}.scanSquare{min-height:78px;padding:10px}}
 </style>
 </head>
 <body><div class="app">
-<h1>Carrinho Scanner</h1><div class="sub">V13 • carrinho + lista de compras</div>
+<h1>Carrinho Scanner</h1><div class="sub">V14 • compra rápida + conferência</div>
 
 <div id="activeBanner" class="banner hidden">
  <div class="muted">Compra em andamento</div><div id="activeTitle" class="big"></div><div id="activeDate" class="muted"></div>
@@ -62,8 +73,12 @@ canvas{width:100%;height:220px;background:#fff;border:1px solid var(--l);border-
 
 <div id="shopping" class="hidden">
 <div class="card">
- <div class="row stack"><input id="ean" class="grow" inputmode="numeric" placeholder="Código de barras / EAN"><button id="scan" class="secondary">📷 Escanear</button><button id="find" class="primary">Buscar</button></div>
- <div id="camBox" class="hidden" style="margin-top:10px"><video id="video" playsinline muted></video><button id="stopCam" class="secondary" style="width:100%;margin-top:7px">Fechar câmera</button></div>
+ <div class="scanLaunch">
+   <button id="scan" class="primary scanSquare">📷<br>Escanear produto</button>
+   <button id="manualNoCode" class="secondary scanSquare">➕<br>Adicionar sem código</button>
+ </div>
+ <div class="row"><input id="ean" class="grow" inputmode="numeric" placeholder="EAN para busca manual"><button id="find" class="secondary">Buscar</button></div>
+ <div id="camBox" class="hidden camMini"><video id="video" playsinline muted></video><button id="stopCam" class="camClose" aria-label="Cancelar leitura">×</button></div>
  <div id="lookup" class="muted" style="margin-top:7px"></div>
  <div id="lookupSource" class="source hidden"></div>
 
@@ -77,11 +92,30 @@ canvas{width:100%;height:220px;background:#fff;border:1px solid var(--l);border-
    <div id="priceCompare" style="margin-top:8px;font-weight:700"></div>
  </div>
 
- <div id="manual" class="hidden"><label>Nome do produto</label><input id="name" placeholder="Digite o produto"></div>
- <label style="display:flex;gap:8px;align-items:center"><input id="weightToggle" type="checkbox" style="width:20px"> Vendido por kg</label>
- <div id="unit" class="grid"><div><label>Preço unitário</label><input id="price" inputmode="decimal" placeholder="R$ 0,00"></div><div><label>Quantidade</label><input id="qty" type="number" min="1" value="1"></div></div>
- <div id="weight" class="grid hidden"><div><label>Preço/kg</label><input id="kgprice" inputmode="decimal" placeholder="R$ 0,00"></div><div><label>Peso (kg)</label><input id="kg" inputmode="decimal" placeholder="Opcional"></div></div>
- <div id="msg" class="muted" style="margin:7px 0"></div><button id="add" class="primary" style="width:100%">OK • Adicionar à lista</button>
+ <div id="productSheet" class="sheet hidden">
+  <div class="sheetCard">
+   <div class="row"><div class="grow"><div id="sheetStatus" class="sheetTitle">Produto</div><div id="sheetCode" class="muted"></div></div><button id="closeSheet" class="secondary">×</button></div>
+   <div id="manual"><label>✏️ Produto</label><input id="name" placeholder="Nome do produto"></div>
+   <label style="display:flex;gap:8px;align-items:center"><input id="weightToggle" type="checkbox" style="width:20px"> ⚖️ Produto vendido por peso</label>
+   <div id="unit">
+     <label>💲 Valor unitário</label><input id="price" inputmode="decimal" placeholder="R$ 0,00">
+     <label>🔢 Quantidade</label><div class="qtyCtl"><button id="qtyMinus" class="secondary">−</button><input id="qty" type="number" min="1" step="1" value="1"><button id="qtyPlus" class="secondary">+</button></div>
+     <div id="unitCalc" class="muted" style="margin-top:6px"></div>
+   </div>
+   <div id="weight" class="hidden">
+     <div class="grid"><div><label>Preço/kg</label><input id="kgprice" inputmode="decimal" placeholder="Opcional"></div><div><label>Peso (kg)</label><input id="kg" inputmode="decimal" placeholder="Opcional"></div></div>
+     <label>Valor total informado pela balança</label><input id="weightTotal" inputmode="decimal" placeholder="Opcional">
+     <div id="weightCalc" class="pending">⚠️ Peso/valor a conferir na nota</div>
+   </div>
+   <label style="display:flex;gap:8px;align-items:center"><input id="promoToggle" type="checkbox" style="width:20px"> 📱 Tem preço de app/clube</label>
+   <div id="promoBox" class="promoBox hidden">
+     <div class="grid"><div><label>Preço normal</label><input id="normalPrice" inputmode="decimal"></div><div><label>Preço com app/clube</label><input id="clubPrice" inputmode="decimal"></div></div>
+     <div class="muted">⚠️ O preço com app/clube será o valor esperado na conferência.</div>
+   </div>
+   <div id="msg" class="muted" style="margin:8px 0"></div>
+   <button id="add" class="primary" style="width:100%">ADICIONAR</button>
+  </div>
+ </div>
  <div id="editPanel" class="editbox hidden">
    <strong>Editar item</strong>
    <div class="muted" id="editLabel"></div>
@@ -207,11 +241,12 @@ const num=v=>{let s=String(v||'').trim();if(!s)return 0;if(s.includes(','))s=s.r
 const fmt=s=>new Date(s).toLocaleString('pt-BR');
 const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]));
 // V11 migra automaticamente os dados anteriores para não perder histórico.
-let products=JSON.parse(localStorage.getItem('v13_products')||localStorage.getItem('v11_products')||localStorage.getItem('v10_products')||localStorage.getItem('v9_products')||localStorage.getItem('v6_products')||localStorage.getItem('v5_products')||localStorage.getItem('v4_products')||'{}'),
-    purchases=JSON.parse(localStorage.getItem('v13_purchases')||localStorage.getItem('v11_purchases')||localStorage.getItem('v10_purchases')||localStorage.getItem('v9_purchases')||localStorage.getItem('v6_purchases')||localStorage.getItem('v5_purchases')||localStorage.getItem('v4_purchases')||'[]'),
-    active=JSON.parse(localStorage.getItem('v13_active')||localStorage.getItem('v11_active')||localStorage.getItem('v10_active')||localStorage.getItem('v9_active')||localStorage.getItem('v6_active')||localStorage.getItem('v5_active')||localStorage.getItem('v4_active')||'null'),
+let products=JSON.parse(localStorage.getItem('v14_products')||localStorage.getItem('v13_products')||localStorage.getItem('v11_products')||localStorage.getItem('v10_products')||localStorage.getItem('v9_products')||localStorage.getItem('v6_products')||localStorage.getItem('v5_products')||localStorage.getItem('v4_products')||'{}'),
+    purchases=JSON.parse(localStorage.getItem('v14_purchases')||localStorage.getItem('v13_purchases')||localStorage.getItem('v11_purchases')||localStorage.getItem('v10_purchases')||localStorage.getItem('v9_purchases')||localStorage.getItem('v6_purchases')||localStorage.getItem('v5_purchases')||localStorage.getItem('v4_purchases')||'[]'),
+    active=JSON.parse(localStorage.getItem('v14_active')||localStorage.getItem('v13_active')||localStorage.getItem('v11_active')||localStorage.getItem('v10_active')||localStorage.getItem('v9_active')||localStorage.getItem('v6_active')||localStorage.getItem('v5_active')||localStorage.getItem('v4_active')||'null'),
     foundName='',foundSource='',stream=null,timer=null,qstream=null,qtimer=null,currentKey='',lookupSeq=0,scannerBusy=false,scanLockedCode='',lastComparison=null,lastReceipt=null,editingIndex=-1,resumeScannerAfterAdd=false,selectedHistoryIndex=-1;
-let wishlist=JSON.parse(localStorage.getItem('v13_wishlist')||'[]');
+let entryWithoutCode=false;
+let wishlist=JSON.parse(localStorage.getItem('v14_wishlist')||localStorage.getItem('v13_wishlist')||'[]');
 
 const verifiedSeed={
  "7896004704623":{name:"Maleato de Dexclorfeniramina + Betametasona EMS 120 ml",source:"Cadastro verificado"},
@@ -222,10 +257,10 @@ const verifiedSeed={
 };
 
 function save(){
- localStorage.setItem('v13_products',JSON.stringify(products));
- localStorage.setItem('v13_purchases',JSON.stringify(purchases));
- localStorage.setItem('v13_active',JSON.stringify(active));
- localStorage.setItem('v13_wishlist',JSON.stringify(wishlist));
+ localStorage.setItem('v14_products',JSON.stringify(products));
+ localStorage.setItem('v14_purchases',JSON.stringify(purchases));
+ localStorage.setItem('v14_active',JSON.stringify(active));
+ localStorage.setItem('v14_wishlist',JSON.stringify(wishlist));
 }
 function historyFor(code,name){
   const key=code||name, arr=[];
@@ -361,32 +396,32 @@ async function lookup(){
    $('manual').classList.remove('hidden');$('name').focus();
  }
 }
+function resetEntry(){
+ ['name','price','kgprice','kg','weightTotal','normalPrice','clubPrice'].forEach(i=>{if($(i))$(i).value=''});
+ $('qty').value='1';$('weightToggle').checked=false;$('promoToggle').checked=false;
+ $('unit').classList.remove('hidden');$('weight').classList.add('hidden');$('promoBox').classList.add('hidden');
+}
+function openProductSheet(){ $('productSheet').classList.remove('hidden');updateEntryCalc() }
+function closeProductSheet(){ $('productSheet').classList.add('hidden');entryWithoutCode=false;foundName='';foundSource='';currentKey=''; }
 function prepareScannedProduct(code,result){
- resumeScannerAfterAdd=true;
- $('ean').value=code;
- $('price').value='';$('qty').value='1';$('kgprice').value='';$('kg').value='';
- $('weightToggle').checked=false;$('unit').classList.remove('hidden');$('weight').classList.add('hidden');
- currentKey=code;
-
+ resumeScannerAfterAdd=false;entryWithoutCode=false;resetEntry();$('ean').value=code;currentKey=code;
  if(result){
-   foundName=result.name;foundSource=result.source||'';
-   $('manual').classList.add('hidden');
-   $('name').value='';
-   $('lookup').innerHTML='Produto encontrado: <b>'+esc(foundName)+'</b>';
-   setSource(foundSource);
-   showPriceHint(code,foundName);
-   $('msg').textContent='Informe o valor e a quantidade. Depois toque em OK para adicionar à lista.';
-   setTimeout(()=>$('price').focus(),80);
+   foundName=result.name;foundSource=result.source||'';$('name').value=foundName;
+   $('sheetStatus').textContent='✅ PRODUTO ENCONTRADO';$('sheetCode').textContent='EAN: '+code;
+   $('lookup').textContent='✅ Produto encontrado: '+foundName;setSource(foundSource);showPriceHint(code,foundName);
+   $('msg').textContent='Confira nome, valor e quantidade antes de adicionar.';
  }else{
-   foundName='';foundSource='';
-   $('manual').classList.remove('hidden');
-   $('name').value='';
-   $('lookup').textContent='Produto não reconhecido.';
-   setSource('Será salvo no seu cadastro');
-   $('priceHint').classList.add('hidden');
-   $('msg').textContent='Digite o nome, o valor e a quantidade. Depois toque em OK para adicionar à lista.';
-   setTimeout(()=>$('name').focus(),80);
+   foundName='';foundSource='';$('sheetStatus').textContent='⚠️ PRODUTO NÃO ENCONTRADO';$('sheetCode').textContent='Código lido: '+code;
+   $('lookup').textContent='⚠️ Código lido corretamente, mas o produto não foi encontrado na base.';
+   setSource('Cadastre uma vez e o EAN ficará salvo localmente');$('priceHint').classList.add('hidden');
+   $('msg').textContent='Digite o nome, valor e quantidade.';
  }
+ openProductSheet();setTimeout(()=>$(result?'price':'name').focus(),80);
+}
+function prepareNoCode(){
+ entryWithoutCode=true;foundName='';foundSource='';currentKey='';resetEntry();$('ean').value='';
+ $('sheetStatus').textContent='➕ ADICIONAR SEM CÓDIGO';$('sheetCode').textContent='Frutas, verduras, padaria, carnes e itens a granel';
+ $('lookup').textContent='';setSource('');$('priceHint').classList.add('hidden');openProductSheet();setTimeout(()=>$('name').focus(),80);
 }
 async function handleScannedProduct(code){
  if(scannerBusy||!active)return;
@@ -398,25 +433,61 @@ async function handleScannedProduct(code){
    const r=await resolveProduct(code);
    prepareScannedProduct(code,r);
  }catch(e){
-   prepareScannedProduct(code,null);
+   $('msg').textContent='❌ Falha ao identificar o produto. Tente novamente.';
  }finally{
    scannerBusy=false;
  }
 }
 $('find').onclick=lookup;$('ean').onkeydown=e=>{if(e.key==='Enter')lookup()};
-$('price').addEventListener('input',updateCurrentPriceComparison);$('kgprice').addEventListener('input',updateCurrentPriceComparison);
-$('weightToggle').onchange=()=>{$('unit').classList.toggle('hidden',$('weightToggle').checked);$('weight').classList.toggle('hidden',!$('weightToggle').checked);updateCurrentPriceComparison()};
-$('add').onclick=()=>{if(!active)return;let code=$('ean').value.trim(),name=foundName||$('name').value.trim();if(!name){$('msg').textContent='Identifique o produto.';return}if(!foundName&&code)products[code]={name,source:'Cadastrado por você'};let w=$('weightToggle').checked,item;
-if(w){let p=num($('kgprice').value),kg=num($('kg').value);if(p<=0){$('msg').textContent='Informe o preço/kg.';return}item={code,name,byWeight:true,price:p,kg,pending:kg<=0,total:kg>0?p*kg:0}}
-else{let p=num($('price').value),q=num($('qty').value);if(p<=0){$('msg').textContent='Informe o valor do produto.';return}if(q<=0){$('msg').textContent='Informe uma quantidade válida.';return}item={code,name,byWeight:false,price:p,qty:q,pending:false,pendingPrice:false,total:p*q}}
-active.items.push(item);autoCheckWishlist(name);save();['ean','name','price','kgprice','kg'].forEach(i=>$(i).value='');$('qty').value=1;$('manual').classList.add('hidden');$('lookup').textContent='';setSource('');$('priceHint').classList.add('hidden');foundName='';foundSource='';currentKey='';renderCart();$('msg').textContent='✓ Produto adicionado à lista.';const restart=resumeScannerAfterAdd;resumeScannerAfterAdd=false;if(restart)setTimeout(()=>camera('product'),250)};
+$('manualNoCode').onclick=prepareNoCode;
+$('closeSheet').onclick=closeProductSheet;
+$('productSheet').addEventListener('click',e=>{if(e.target===$('productSheet'))closeProductSheet()});
+function updateEntryCalc(){
+ const q=Math.max(1,Math.floor(num($('qty').value)||1)),p=num($('price').value),cp=num($('clubPrice').value);
+ $('qty').value=q;
+ const expected=$('promoToggle').checked&&cp>0?cp:p;
+ $('unitCalc').textContent=expected>0?q+' × '+money(expected)+' = '+money(q*expected):'';
+ const kp=num($('kgprice').value),kg=num($('kg').value),wt=num($('weightTotal').value);
+ if(wt>0)$('weightCalc').innerHTML='⚖️ Valor informado pela balança: <b>'+money(wt)+'</b>';
+ else if(kp>0&&kg>0)$('weightCalc').innerHTML='⚖️ Estimativa: <b>'+money(kp*kg)+'</b> • valor aproximado';
+ else $('weightCalc').textContent='⚠️ Peso/valor a conferir na nota';
+ updateCurrentPriceComparison();
+}
+$('qtyMinus').onclick=()=>{$('qty').value=Math.max(1,Math.floor(num($('qty').value)||1)-1);updateEntryCalc()};
+$('qtyPlus').onclick=()=>{$('qty').value=Math.max(1,Math.floor(num($('qty').value)||1)+1);updateEntryCalc()};
+['qty','price','kgprice','kg','weightTotal','normalPrice','clubPrice'].forEach(i=>$(i).addEventListener('input',updateEntryCalc));
+$('weightToggle').onchange=()=>{$('unit').classList.toggle('hidden',$('weightToggle').checked);$('weight').classList.toggle('hidden',!$('weightToggle').checked);updateEntryCalc()};
+$('promoToggle').onchange=()=>{$('promoBox').classList.toggle('hidden',!$('promoToggle').checked);updateEntryCalc()};
+$('add').onclick=()=>{
+ if(!active)return;
+ let code=entryWithoutCode?'':$('ean').value.trim(),name=$('name').value.trim()||foundName;
+ if(!name){$('msg').textContent='Informe o nome do produto.';return}
+ if(code)products[code]={name,source:foundName?'Confirmado por você':'Cadastrado por você'};
+ const w=$('weightToggle').checked,promo=$('promoToggle').checked;
+ const normal=num($('normalPrice').value),club=num($('clubPrice').value);
+ let item;
+ if(w){
+   const kp=num($('kgprice').value),kg=num($('kg').value),wt=num($('weightTotal').value);
+   const estimated=wt>0?wt:(kp>0&&kg>0?kp*kg:0);
+   item={code,name,byWeight:true,price:kp,kg:kg||0,total:estimated,pending:estimated<=0,pendingPrice:estimated<=0,estimated:wt<=0&&estimated>0,
+         scaleTotal:wt||0,promo,promoNormal:normal||0,promoClub:club||0};
+ }else{
+   let p=num($('price').value),q=Math.max(1,Math.floor(num($('qty').value)||1));
+   if(promo&&club>0)p=club;
+   if(p<=0){$('msg').textContent='Informe o valor do produto.';return}
+   item={code,name,byWeight:false,price:p,qty:q,pending:false,pendingPrice:false,total:p*q,promo,promoNormal:normal||0,promoClub:club||0};
+ }
+ active.items.push(item);autoCheckWishlist(name);save();renderCart();closeProductSheet();
+ $('ean').value='';$('lookup').textContent='';setSource('');$('priceHint').classList.add('hidden');
+ $('msg').textContent='';scanLockedCode='';
+};
 function renderCart(){
  if(!active)return;
  let b=$('cart');b.innerHTML='';
  active.items.forEach((x,i)=>{
    let r=document.createElement('div');r.className='item';
-   const detail=x.byWeight?(x.pending?money(x.price)+'/kg • peso pendente':money(x.price)+'/kg • '+x.kg+' kg'):(x.pendingPrice?x.qty+' un • valor ainda não informado':x.qty+' × '+money(x.price));
-   const value=(x.pending||x.pendingPrice)?'Registrado':money(x.total);
+   const detail=x.byWeight?(x.pending?'⚠️ Peso/valor a conferir na nota':((x.price?money(x.price)+'/kg • ':'')+(x.kg?x.kg+' kg':'valor da balança')+(x.estimated?' • estimado':''))):(x.qty+' × '+money(x.price)+(x.promo?' • 📱 app/clube':''));
+   const value=(x.pending||x.pendingPrice)?'Pendente':money(x.total);
    r.innerHTML=`<div><div class="name">${esc(x.name)}</div><div class="muted">${detail}</div></div><div class="right"><div class="name">${value}</div><div class="itemEdit"><button class="secondary editBtn">Editar</button> <button class="danger delBtn">×</button></div></div>`;
    r.querySelector('.editBtn').onclick=()=>openEdit(i);
    r.querySelector('.delBtn').onclick=()=>{active.items.splice(i,1);save();renderCart()};
@@ -576,7 +647,9 @@ function parseReceiptText(text){
  let issuer='';
  const idx=lines.findIndex(x=>/DOCUMENTO AUXILIAR DA NOTA FISCAL/i.test(x));
  if(idx>=0&&lines[idx+1])issuer=lines[idx+1];
- return {items,total:safeNumber(total),declaredCount:Number(count||items.length),number:info?info[1]:'',series:info?info[2]:'',issuedAt:info?info[3]:'',cnpj,issuer};
+ const discount=(t.match(/(?:Descontos?|Valor total de desconto)\s*(?:R\$)?\s*:?\s*([\d.,]+)/i)||[])[1];
+ const gross=(t.match(/(?:Valor total dos produtos|Total bruto dos produtos)\s*(?:R\$)?\s*:?\s*([\d.,]+)/i)||[])[1];
+ return {items,total:safeNumber(total),discount:safeNumber(discount),gross:safeNumber(gross),declaredCount:Number(count||items.length),number:info?info[1]:'',series:info?info[2]:'',issuedAt:info?info[3]:'',cnpj,issuer};
 }
 function matchReceipt(cart,receiptItems){
  const used=new Set(),rows=[];
@@ -590,22 +663,26 @@ function matchReceipt(cart,receiptItems){
      if(best<.42)ix=-1;
    }
    if(ix<0){
-     rows.push({status:'divergence',name:r.name,reasons:['Produto da nota não foi registrado durante a compra'],receipt:r});
+     rows.push({status:'divergence',name:r.name,reasons:['🚨 Produto não lançado durante a compra'],receipt:r});
      return;
    }
    used.add(ix);const c=cart[ix],reasons=[];
    const expectedQty=c.byWeight?(Number(c.kg)>0?Number(c.kg):null):Number(c.qty||1);
    if(expectedQty!==null&&Number.isFinite(expectedQty)&&Math.abs(expectedQty-Number(r.qty||0))>.001){
-     reasons.push('Quantidade diferente: compra '+expectedQty+' / nota '+r.qty);
+     reasons.push('🔢 Quantidade divergente: compra '+expectedQty+' / nota '+r.qty);
    }
    const cp=Number(c.price||0);
-   if(cp>0&&Number(r.unitPrice)>=0&&Math.abs(cp-Number(r.unitPrice))>.011){
-     reasons.push('Preço diferente: compra '+money(cp)+' / nota '+money(r.unitPrice));
+   if(c.byWeight&&c.pending){
+     reasons.push('⚠️ Produto pendente por peso/valor: conferir pelos dados da nota');
+   }else if(c.promo&&Number(c.promoClub)>0&&Number(r.unitPrice)>=0&&Math.abs(Number(c.promoClub)-Number(r.unitPrice))>.011){
+     reasons.push('🚨 Promoção não aplicada ou valor diferente: esperado com app '+money(c.promoClub)+' / nota '+money(r.unitPrice));
+   }else if(cp>0&&Number(r.unitPrice)>=0&&Math.abs(cp-Number(r.unitPrice))>.011){
+     reasons.push('❌ Preço divergente: compra '+money(cp)+' / nota '+money(r.unitPrice));
    }
    rows.push({status:reasons.length?'divergence':'ok',name:c.name,reasons,cart:c,receipt:r});
  });
  cart.forEach((c,i)=>{
-   if(!used.has(i))rows.push({status:'divergence',name:c.name,reasons:['Produto registrado durante a compra não aparece na nota'],cart:c});
+   if(!used.has(i))rows.push({status:'divergence',name:c.name,reasons:['🚨 Produto lançado não aparece na nota'],cart:c});
  });
  return rows;
 }
@@ -616,7 +693,9 @@ function noteHtml(meta,key){
  if(meta.number)bits.push('NFC-e nº '+esc(meta.number)+(meta.series?' • Série '+esc(meta.series):''));
  if(meta.issuedAt)bits.push('Emissão: '+esc(meta.issuedAt));
  if(key)bits.push('Chave: '+esc(key));
- if(meta.total>0)bits.push('Total da nota: '+money(meta.total));
+ if(meta.gross>0)bits.push('Total bruto: '+money(meta.gross));
+ if(meta.discount>0)bits.push('Descontos: '+money(meta.discount));
+ if(meta.total>0)bits.push('Valor efetivamente pago: '+money(meta.total));
  return bits.join('<br>');
 }
 function renderComparison(p,meta,rows,key){
@@ -644,9 +723,9 @@ function normalizeOfficialUrl(raw){
  if(/^http:\/\//i.test(u))u='https://'+u.slice(7);
  return u;
 }
-function backendBase(){return (localStorage.getItem('v13_nfce_backend')||localStorage.getItem('v11_nfce_backend')||localStorage.getItem('v10_nfce_backend')||localStorage.getItem('v9_nfce_backend')||'').trim().replace(/\/$/,'')}
+function backendBase(){return (localStorage.getItem('v14_nfce_backend')||localStorage.getItem('v13_nfce_backend')||localStorage.getItem('v11_nfce_backend')||localStorage.getItem('v10_nfce_backend')||localStorage.getItem('v9_nfce_backend')||'').trim().replace(/\/$/,'')}
 function updateBackendStatus(){const u=backendBase();$('backendUrl').value=u;$('backendStatus').textContent=u?'✓ Servidor configurado: '+u:'Servidor ainda não configurado. A NFC-e pode ser aberta, mas a importação automática depende deste servidor.'}
-$('saveBackend').onclick=()=>{let u=$('backendUrl').value.trim().replace(/\/$/,'');if(u&&!/^https:\/\//i.test(u)){alert('Use um endereço https://');return}if(u)localStorage.setItem('v13_nfce_backend',u);else{localStorage.removeItem('v13_nfce_backend');localStorage.removeItem('v11_nfce_backend');localStorage.removeItem('v10_nfce_backend');localStorage.removeItem('v9_nfce_backend');}updateBackendStatus()};
+$('saveBackend').onclick=()=>{let u=$('backendUrl').value.trim().replace(/\/$/,'');if(u&&!/^https:\/\//i.test(u)){alert('Use um endereço https://');return}if(u)localStorage.setItem('v14_nfce_backend',u);else{localStorage.removeItem('v14_nfce_backend');localStorage.removeItem('v13_nfce_backend');localStorage.removeItem('v11_nfce_backend');localStorage.removeItem('v10_nfce_backend');localStorage.removeItem('v9_nfce_backend');}updateBackendStatus()};
 async function fetchReceiptHtml(url){
  const b=backendBase();
  if(b){
@@ -711,7 +790,7 @@ $('pdfReport').onclick=()=>{
  w.document.close();
 };
 
-$('backup').onclick=()=>{let blob=new Blob([JSON.stringify({date:new Date().toISOString(),products,purchases},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='backup-carrinho-scanner-v13.json';a.click()};
+$('backup').onclick=()=>{let blob=new Blob([JSON.stringify({date:new Date().toISOString(),products,purchases},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='backup-carrinho-scanner-v14.json';a.click()};
 document.querySelectorAll('.tab').forEach(x=>x.onclick=()=>{document.querySelectorAll('.tab').forEach(y=>y.classList.remove('active'));document.querySelectorAll('.panel').forEach(y=>y.classList.add('hidden'));x.classList.add('active');$(x.dataset.tab).classList.remove('hidden');update()});
 async function stop(which){let s=which==='qr'?qstream:stream,t=which==='qr'?qtimer:timer;if(t)clearInterval(t);if(s)s.getTracks().forEach(x=>x.stop());if(which==='qr'){qstream=null;qtimer=null;$('qrCamBox').classList.add('hidden');$('torchQR').classList.add('hidden');$('zoomWrap').classList.add('hidden')}else{stream=null;timer=null;$('camBox').classList.add('hidden')}}
 async function configureQrTrack(track){
@@ -742,7 +821,7 @@ async function camera(mode){
    const s=await navigator.mediaDevices.getUserMedia({video:vc,audio:false});
    const v=mode==='qr'?$('qrVideo'):$('video');v.srcObject=s;await v.play();
    if(mode==='qr'){qstream=s;$('qrCamBox').classList.remove('hidden');status.textContent='Aponte para o QR. Aproxime até ele ocupar boa parte da tela e mantenha firme.';const track=s.getVideoTracks()[0];if(track)await configureQrTrack(track)}
-   else{stream=s;$('camBox').classList.remove('hidden');status.textContent='Scanner ativo. Aponte para um produto.'}
+   else{stream=s;$('camBox').classList.remove('hidden');status.textContent='📷 Aponte para o código de barras. A câmera fechará após uma leitura válida.'}
    let detecting=false;
    let ti=setInterval(async()=>{if(detecting)return;detecting=true;try{
      const c=await det.detect(v);if(!c.length){if(mode==='product')scanLockedCode='';return}
@@ -751,7 +830,7 @@ async function camera(mode){
      else{const code=raw.replace(/\D/g,'');if(!code||scannerBusy||code===scanLockedCode)return;scanLockedCode=code;await handleScannedProduct(code)}
    }catch(e){}finally{detecting=false}},mode==='qr'?180:300);
    if(mode==='qr')qtimer=ti;else timer=ti;
- }catch(e){status.textContent='Não foi possível abrir a câmera. Para a NFC-e, tente “Ler QR de uma foto”.'}
+ }catch(e){status.textContent=mode==='qr'?'❌ Não foi possível abrir a câmera. Tente ler o QR de uma foto.':'❌ Falha na leitura/câmera. Feche e tente novamente.'}
 }
 async function readQrFromImage(file){
  if(!file)return;const status=$('receiptStatus');status.innerHTML='<span class="loading"></span>Lendo QR da imagem...';
