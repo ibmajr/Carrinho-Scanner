@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#1769ff"><link rel="manifest" href="manifest.webmanifest">
-<title>Carrinho Scanner V8</title>
+<title>Carrinho Scanner V9</title>
 <style>
 :root{--b:#1769ff;--bg:#f5f7fa;--c:#fff;--t:#17191c;--m:#69727d;--l:#dde3ea;--g:#18763b;--r:#bd2525}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;color:var(--t)}
@@ -30,10 +30,15 @@ canvas{width:100%;height:220px;background:#fff;border:1px solid var(--l);border-
 .summaryBox .n{font-size:24px;font-weight:850}
 .noteMeta{background:#f7f9fc;border:1px solid var(--l);border-radius:12px;padding:10px;margin-top:10px}
 @media(max-width:520px){.summaryGrid{grid-template-columns:1fr 1fr 1fr}}
+
+.editbox{border:2px solid var(--b);border-radius:14px;padding:12px;margin-top:10px;background:#f7faff}
+.editActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.itemEdit{margin-top:7px}
+.backendStatus{padding:8px 10px;border-radius:10px;background:#f5f7fa;margin-top:8px;font-size:13px}
 </style>
 </head>
 <body><div class="app">
-<h1>Carrinho Scanner</h1><div class="sub">V8 • leitura contínua + conferência automática da NFC-e</div>
+<h1>Carrinho Scanner</h1><div class="sub">V9 • carrinho editável + conferência automática da NFC-e</div>
 
 <div id="activeBanner" class="banner hidden">
  <div class="muted">Compra em andamento</div><div id="activeTitle" class="big"></div><div id="activeDate" class="muted"></div>
@@ -76,6 +81,19 @@ canvas{width:100%;height:220px;background:#fff;border:1px solid var(--l);border-
  <div id="unit" class="grid"><div><label>Preço unitário</label><input id="price" inputmode="decimal" placeholder="R$ 0,00"></div><div><label>Quantidade</label><input id="qty" type="number" min="1" value="1"></div></div>
  <div id="weight" class="grid hidden"><div><label>Preço/kg</label><input id="kgprice" inputmode="decimal" placeholder="R$ 0,00"></div><div><label>Peso (kg)</label><input id="kg" inputmode="decimal" placeholder="Opcional"></div></div>
  <div id="msg" class="muted" style="margin:7px 0"></div><button id="add" class="primary" style="width:100%">Adicionar</button>
+ <div id="editPanel" class="editbox hidden">
+   <strong>Editar item</strong>
+   <div class="muted" id="editLabel"></div>
+   <div class="grid">
+     <div><label>Nome</label><input id="editName"></div>
+     <div><label>Quantidade</label><input id="editQty" type="number" min="0.001" step="0.001"></div>
+   </div>
+   <div class="grid">
+     <div><label>Valor unitário / kg</label><input id="editPrice" inputmode="decimal"></div>
+     <div><label>Peso (kg), se aplicável</label><input id="editKg" inputmode="decimal"></div>
+   </div>
+   <div class="editActions"><button id="saveEdit" class="primary grow">Salvar alteração</button><button id="cancelEdit" class="secondary grow">Cancelar</button></div>
+ </div>
 </div>
 <div class="card"><div class="muted">Total estimado</div><div id="total" class="total">R$ 0,00</div><div id="cart"></div><button id="finish" class="ok" style="width:100%;margin-top:10px">Finalizar e conferir cupom</button><button id="cancel" class="danger" style="width:100%;margin-top:7px">Cancelar compra</button></div>
 </div>
@@ -87,8 +105,16 @@ canvas{width:100%;height:220px;background:#fff;border:1px solid var(--l);border-
   <div class="muted">Escaneie o QR Code. A chave é reconhecida automaticamente e o app tenta carregar os itens da nota para comparar com a compra.</div>
 
   <button id="scanQR" class="primary" style="width:100%;margin-top:10px">📷 Escanear QR da NFC-e</button>
+  <div class="row stack" style="margin-top:8px">
+    <button id="photoQR" class="secondary grow">🖼️ Ler QR de uma foto</button>
+    <input id="qrFile" type="file" accept="image/*" capture="environment" class="hidden">
+  </div>
   <div id="qrCamBox" class="hidden" style="margin-top:10px">
     <video id="qrVideo" playsinline muted></video>
+    <div id="qrCameraTools" class="row stack" style="margin-top:7px">
+      <button id="torchQR" class="secondary grow hidden">🔦 Lanterna</button>
+      <div id="zoomWrap" class="grow hidden"><label style="margin:0 0 4px">Zoom</label><input id="zoomQR" type="range" min="1" max="1" step="0.1" value="1"></div>
+    </div>
     <button id="stopQR" class="secondary" style="width:100%;margin-top:7px">Fechar câmera</button>
   </div>
 
@@ -106,6 +132,9 @@ canvas{width:100%;height:220px;background:#fff;border:1px solid var(--l);border-
       <button id="retryReceipt" class="secondary grow">Tentar carregar novamente</button>
       <button id="openOfficial" class="secondary grow">Abrir nota oficial</button>
     </div>
+    <label>Servidor da NFC-e</label>
+    <div class="row stack"><input id="backendUrl" class="grow" placeholder="https://seu-worker.workers.dev/nfce"><button id="saveBackend" class="secondary">Salvar servidor</button></div>
+    <div id="backendStatus" class="backendStatus">Servidor ainda não configurado.</div>
   </details>
 
   <div id="noteMeta" class="noteMeta hidden"></div>
@@ -145,10 +174,10 @@ const num=v=>{let s=String(v||'').trim();if(!s)return 0;if(s.includes(','))s=s.r
 const fmt=s=>new Date(s).toLocaleString('pt-BR');
 const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]));
 // V5 migra automaticamente os dados da V4 para não perder histórico.
-let products=JSON.parse(localStorage.getItem('v6_products')||localStorage.getItem('v5_products')||localStorage.getItem('v4_products')||'{}'),
-    purchases=JSON.parse(localStorage.getItem('v6_purchases')||localStorage.getItem('v5_purchases')||localStorage.getItem('v4_purchases')||'[]'),
-    active=JSON.parse(localStorage.getItem('v6_active')||localStorage.getItem('v5_active')||localStorage.getItem('v4_active')||'null'),
-    foundName='',foundSource='',stream=null,timer=null,qstream=null,qtimer=null,currentKey='',lookupSeq=0,scannerBusy=false,scanLockedCode='',lastComparison=null,lastReceipt=null;
+let products=JSON.parse(localStorage.getItem('v9_products')||localStorage.getItem('v6_products')||localStorage.getItem('v5_products')||localStorage.getItem('v4_products')||'{}'),
+    purchases=JSON.parse(localStorage.getItem('v9_purchases')||localStorage.getItem('v6_purchases')||localStorage.getItem('v5_purchases')||localStorage.getItem('v4_purchases')||'[]'),
+    active=JSON.parse(localStorage.getItem('v9_active')||localStorage.getItem('v6_active')||localStorage.getItem('v5_active')||localStorage.getItem('v4_active')||'null'),
+    foundName='',foundSource='',stream=null,timer=null,qstream=null,qtimer=null,currentKey='',lookupSeq=0,scannerBusy=false,scanLockedCode='',lastComparison=null,lastReceipt=null,editingIndex=-1,resumeScannerAfterAdd=false;
 
 const verifiedSeed={
  "7896004704623":{name:"Maleato de Dexclorfeniramina + Betametasona EMS 120 ml",source:"Cadastro verificado"},
@@ -159,9 +188,9 @@ const verifiedSeed={
 };
 
 function save(){
- localStorage.setItem('v6_products',JSON.stringify(products));
- localStorage.setItem('v6_purchases',JSON.stringify(purchases));
- localStorage.setItem('v6_active',JSON.stringify(active));
+ localStorage.setItem('v9_products',JSON.stringify(products));
+ localStorage.setItem('v9_purchases',JSON.stringify(purchases));
+ localStorage.setItem('v9_active',JSON.stringify(active));
 }
 function historyFor(code,name){
   const key=code||name, arr=[];
@@ -275,6 +304,18 @@ function addScannedToCart(code,name){
  }
  save();renderCart();
 }
+function prepareUnknownProduct(code){
+ resumeScannerAfterAdd=true;
+ $('ean').value=code;
+ foundName='';foundSource='';
+ $('manual').classList.remove('hidden');
+ $('name').value='';$('price').value='';$('qty').value='1';
+ $('weightToggle').checked=false;$('unit').classList.remove('hidden');$('weight').classList.add('hidden');
+ $('lookup').textContent='Produto não reconhecido. Digite o nome e o valor antes de adicionar à lista.';
+ setSource('Será salvo no seu cadastro');
+ $('msg').textContent='Preencha nome e valor e toque em Adicionar.';
+ $('name').focus();
+}
 async function handleScannedProduct(code){
  if(scannerBusy||!active)return;
  scannerBusy=true;
@@ -287,15 +328,7 @@ async function handleScannedProduct(code){
      $('ean').value='';foundName='';foundSource='';setSource('');
    }else{
      await stop('product');
-     const manualName=prompt('Produto não identificado. Digite o nome uma vez:','');
-     if(manualName&&manualName.trim()){
-       const n=manualName.trim();
-       products[code]={name:n,source:'Cadastrado por você'};save();
-       addScannedToCart(code,n);
-       $('msg').innerHTML='✓ <b>'+esc(n)+'</b> adicionado.';
-     }else{
-       $('msg').textContent='Produto não adicionado.';
-     }
+     prepareUnknownProduct(code);
    }
  }finally{scannerBusy=false}
 }
@@ -304,13 +337,44 @@ $('price').addEventListener('input',updateCurrentPriceComparison);$('kgprice').a
 $('weightToggle').onchange=()=>{$('unit').classList.toggle('hidden',$('weightToggle').checked);$('weight').classList.toggle('hidden',!$('weightToggle').checked);updateCurrentPriceComparison()};
 $('add').onclick=()=>{if(!active)return;let code=$('ean').value.trim(),name=foundName||$('name').value.trim();if(!name){$('msg').textContent='Identifique o produto.';return}if(!foundName&&code)products[code]={name,source:'Cadastrado por você'};let w=$('weightToggle').checked,item;
 if(w){let p=num($('kgprice').value),kg=num($('kg').value);if(p<=0){$('msg').textContent='Informe o preço/kg.';return}item={code,name,byWeight:true,price:p,kg,pending:kg<=0,total:kg>0?p*kg:0}}
-else{let p=num($('price').value),q=Math.max(1,parseInt($('qty').value)||1);if(p<=0){$('msg').textContent='Informe o preço.';return}item={code,name,byWeight:false,price:p,qty:q,pending:false,total:p*q}}
-active.items.push(item);save();['ean','name','price','kgprice','kg'].forEach(i=>$(i).value='');$('qty').value=1;$('manual').classList.add('hidden');$('lookup').textContent='';setSource('');$('priceHint').classList.add('hidden');foundName='';foundSource='';currentKey='';renderCart()};
-function renderCart(){if(!active)return;let b=$('cart');b.innerHTML='';active.items.forEach((x,i)=>{let r=document.createElement('div');r.className='item';r.innerHTML=`<div><div class="name">${x.name}</div><div class="muted">${x.byWeight?(x.pending?money(x.price)+'/kg • peso pendente':money(x.price)+'/kg • '+x.kg+' kg'):(x.pendingPrice?x.qty+' un • preço será conferido pela nota':x.qty+' × '+money(x.price))}</div></div><div class="right"><div class="name">${(x.pending||x.pendingPrice)?'Registrado':money(x.total)}</div></div>`;let d=document.createElement('button');d.className='danger';d.textContent='×';d.onclick=()=>{active.items.splice(i,1);save();renderCart()};r.lastChild.appendChild(d);b.appendChild(r)});$('total').textContent=money(active.items.reduce((s,x)=>s+(x.total||0),0))}
-$('finish').onclick=()=>{if(!active||!active.items.length)return;active.finished=new Date().toISOString();active.estimatedTotal=active.items.reduce((s,x)=>s+(x.total||0),0);purchases.unshift(active);active=null;save();update();document.querySelector('[data-tab="receipt"]').click()};
+else{let p=num($('price').value),q=Math.max(1,num($('qty').value)||1);if(p<=0){$('msg').textContent='Informe o preço.';return}item={code,name,byWeight:false,price:p,qty:q,pending:false,pendingPrice:false,total:p*q}}
+active.items.push(item);save();['ean','name','price','kgprice','kg'].forEach(i=>$(i).value='');$('qty').value=1;$('manual').classList.add('hidden');$('lookup').textContent='';setSource('');$('priceHint').classList.add('hidden');foundName='';foundSource='';currentKey='';renderCart();const restart=resumeScannerAfterAdd;resumeScannerAfterAdd=false;if(restart)setTimeout(()=>camera('product'),120)};
+function renderCart(){
+ if(!active)return;
+ let b=$('cart');b.innerHTML='';
+ active.items.forEach((x,i)=>{
+   let r=document.createElement('div');r.className='item';
+   const detail=x.byWeight?(x.pending?money(x.price)+'/kg • peso pendente':money(x.price)+'/kg • '+x.kg+' kg'):(x.pendingPrice?x.qty+' un • valor ainda não informado':x.qty+' × '+money(x.price));
+   const value=(x.pending||x.pendingPrice)?'Registrado':money(x.total);
+   r.innerHTML=`<div><div class="name">${esc(x.name)}</div><div class="muted">${detail}</div></div><div class="right"><div class="name">${value}</div><div class="itemEdit"><button class="secondary editBtn">Editar</button> <button class="danger delBtn">×</button></div></div>`;
+   r.querySelector('.editBtn').onclick=()=>openEdit(i);
+   r.querySelector('.delBtn').onclick=()=>{active.items.splice(i,1);save();renderCart()};
+   b.appendChild(r)
+ });
+ $('total').textContent=money(active.items.reduce((s,x)=>s+(x.total||0),0));
+}
+function openEdit(i){
+ if(!active||!active.items[i])return;editingIndex=i;const x=active.items[i];
+ $('editPanel').classList.remove('hidden');$('editLabel').textContent=x.code?'EAN '+x.code:'Item sem EAN';
+ $('editName').value=x.name||'';$('editQty').value=x.byWeight?(x.kg||1):(x.qty||1);$('editPrice').value=String(x.price||'').replace('.',',');$('editKg').value=x.byWeight?(x.kg||''):'';
+ $('editKg').disabled=!x.byWeight;
+ $('editPanel').scrollIntoView({behavior:'smooth',block:'center'});
+}
+$('cancelEdit').onclick=()=>{editingIndex=-1;$('editPanel').classList.add('hidden')};
+$('saveEdit').onclick=()=>{
+ if(editingIndex<0||!active||!active.items[editingIndex])return;const x=active.items[editingIndex];
+ const name=$('editName').value.trim(),price=num($('editPrice').value),qty=Math.max(.001,num($('editQty').value)||1),kg=num($('editKg').value);
+ if(!name){$('editName').focus();return}if(price<0)return;
+ x.name=name;x.price=price;x.pendingPrice=price<=0;
+ if(x.byWeight){x.kg=kg>0?kg:qty;x.pending=x.kg<=0;x.total=price>0&&x.kg>0?price*x.kg:0}
+ else{x.qty=qty;x.pending=false;x.total=price>0?price*qty:0}
+ if(x.code)products[x.code]={name:x.name,source:'Editado por você'};
+ save();editingIndex=-1;$('editPanel').classList.add('hidden');renderCart();
+};
+$('finish').onclick=()=>{if(!active||!active.items.length)return;const pend=active.items.filter(x=>x.pendingPrice);if(pend.length&&!confirm(pend.length+' item(ns) ainda estão sem valor. Finalizar mesmo assim?'))return;active.finished=new Date().toISOString();active.estimatedTotal=active.items.reduce((s,x)=>s+(x.total||0),0);purchases.unshift(active);active=null;save();update();document.querySelector('[data-tab="receipt"]').click()};
 $('cancel').onclick=()=>{if(confirm('Cancelar esta compra?')){active=null;save();update()}};
 function renderHistory(){let b=$('historyList');b.innerHTML='';if(!purchases.length){b.innerHTML='<div class="muted">Nenhuma compra salva.</div>';return}purchases.forEach(p=>{let r=document.createElement('div');r.className='item';r.innerHTML=`<div><div class="name">${p.store}</div><div class="muted">${fmt(p.started)} • ${p.items.length} produtos</div></div><div class="right"><div class="name">${money(p.receiptTotal??p.estimatedTotal)}</div><div class="muted">estimado ${money(p.estimatedTotal)}</div></div>`;b.appendChild(r)})}
-function buildPriceMap(){let map={};purchases.forEach(p=>p.items.forEach(x=>{let k=x.code||x.name;if(!map[k])map[k]={key:k,name:x.name,a:[]};map[k].a.push({date:p.started,store:p.store,price:x.price,unit:x.byWeight?'kg':'un'})}));Object.values(map).forEach(x=>x.a.sort((a,b)=>new Date(a.date)-new Date(b.date)));return map}
+function buildPriceMap(){let map={};purchases.forEach(p=>p.items.filter(x=>Number(x.price)>0).forEach(x=>{let k=x.code||x.name;if(!map[k])map[k]={key:k,name:x.name,a:[]};map[k].a.push({date:p.started,store:p.store,price:x.price,unit:x.byWeight?'kg':'un'})}));Object.values(map).forEach(x=>x.a.sort((a,b)=>new Date(a.date)-new Date(b.date)));return map}
 function renderPrices(){let map=buildPriceMap(),b=$('priceList');b.innerHTML='';let a=Object.values(map);if(!a.length){b.innerHTML='<div class="muted">Nenhum preço registrado.</div>';return}a.forEach(x=>{let e=x.a[x.a.length-1],min=Math.min(...x.a.map(y=>y.price)),r=document.createElement('div');r.className='item';r.innerHTML=`<div><div class="name">${x.name}</div><div class="muted">${x.a.length} registro(s) • menor ${money(min)}/${e.unit}</div></div><div class="right"><div class="name">${money(e.price)}/${e.unit}</div><button class="secondary" style="margin-top:6px">Ver gráfico</button></div>`;r.querySelector('button').onclick=()=>showChart(x);b.appendChild(r)})}
 function showChart(x){
  $('chartCard').classList.remove('hidden');$('chartTitle').textContent=x.name;$('chartSubtitle').textContent='Evolução do preço pago';
@@ -424,6 +488,17 @@ function normalizeOfficialUrl(raw){
  if(/^http:\/\//i.test(u))u='https://'+u.slice(7);
  return u;
 }
+function backendBase(){return (localStorage.getItem('v9_nfce_backend')||'').trim().replace(/\/$/,'')}
+function updateBackendStatus(){const u=backendBase();$('backendUrl').value=u;$('backendStatus').textContent=u?'✓ Servidor configurado: '+u:'Servidor ainda não configurado. A NFC-e pode ser aberta, mas a importação automática depende deste servidor.'}
+$('saveBackend').onclick=()=>{let u=$('backendUrl').value.trim().replace(/\/$/,'');if(u&&!/^https:\/\//i.test(u)){alert('Use um endereço https://');return}if(u)localStorage.setItem('v9_nfce_backend',u);else localStorage.removeItem('v9_nfce_backend');updateBackendStatus()};
+async function fetchReceiptHtml(url){
+ const b=backendBase();
+ if(b){
+   const endpoint=b+(b.includes('?')?'&':'?')+'url='+encodeURIComponent(url);
+   const r=await fetch(endpoint,{cache:'no-store'});if(!r.ok)throw new Error('Servidor NFC-e: HTTP '+r.status);return await r.text();
+ }
+ const r=await fetch(url,{method:'GET',mode:'cors',cache:'no-store',credentials:'omit'});if(!r.ok)throw new Error('HTTP '+r.status);return await r.text();
+}
 async function loadReceiptAutomatically(raw){
  if(!purchases.length){$('receiptStatus').textContent='Finalize a compra antes de ler o cupom.';return}
  const url=normalizeOfficialUrl(raw),key=parseKey(raw);
@@ -431,9 +506,7 @@ async function loadReceiptAutomatically(raw){
  $('receiptStatus').innerHTML='<span class="loading"></span>QR reconhecido. Carregando itens da NFC-e...';
  const p=purchases[0];
  try{
-   const r=await fetch(url,{method:'GET',mode:'cors',cache:'no-store',credentials:'omit'});
-   if(!r.ok)throw new Error('HTTP '+r.status);
-   const html=await r.text(),doc=new DOMParser().parseFromString(html,'text/html');
+   const html=await fetchReceiptHtml(url),doc=new DOMParser().parseFromString(html,'text/html');
    const text=(doc.body&&doc.body.innerText)||doc.documentElement.textContent||'';
    const meta=parseReceiptText(text);
    if(!meta.items.length)throw new Error('Itens não encontrados na resposta');
@@ -443,7 +516,7 @@ async function loadReceiptAutomatically(raw){
    renderComparison(p,meta,rows,key);
  }catch(e){
    p.qr=raw;p.key=key;save();
-   $('receiptStatus').innerHTML='⚠ QR e chave reconhecidos, mas o site oficial não permitiu que este app carregasse os itens automaticamente. Isso pode ocorrer por bloqueio de acesso entre sites (CORS). Use “Abrir nota oficial” para conferir a consulta.';
+   $('receiptStatus').innerHTML=backendBase()?'⚠ QR e chave reconhecidos, mas o servidor da NFC-e não conseguiu carregar os itens. Tente novamente ou abra a nota oficial.':'⚠ QR e chave reconhecidos. Configure o “Servidor da NFC-e” abaixo para importar os itens automaticamente sem bloqueio de CORS.';
    $('noteMeta').classList.remove('hidden');
    $('noteMeta').innerHTML=(key?'Chave reconhecida: '+esc(key):'QR reconhecido.');
  }
@@ -482,38 +555,66 @@ $('pdfReport').onclick=()=>{
  w.document.close();
 };
 
-$('backup').onclick=()=>{let blob=new Blob([JSON.stringify({date:new Date().toISOString(),products,purchases},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='backup-carrinho-scanner-v6.json';a.click()};
+$('backup').onclick=()=>{let blob=new Blob([JSON.stringify({date:new Date().toISOString(),products,purchases},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='backup-carrinho-scanner-v9.json';a.click()};
 document.querySelectorAll('.tab').forEach(x=>x.onclick=()=>{document.querySelectorAll('.tab').forEach(y=>y.classList.remove('active'));document.querySelectorAll('.panel').forEach(y=>y.classList.add('hidden'));x.classList.add('active');$(x.dataset.tab).classList.remove('hidden');update()});
-async function stop(which){let s=which==='qr'?qstream:stream,t=which==='qr'?qtimer:timer;if(t)clearInterval(t);if(s)s.getTracks().forEach(x=>x.stop());if(which==='qr'){qstream=null;qtimer=null;$('qrCamBox').classList.add('hidden')}else{stream=null;timer=null;$('camBox').classList.add('hidden')}}
+async function stop(which){let s=which==='qr'?qstream:stream,t=which==='qr'?qtimer:timer;if(t)clearInterval(t);if(s)s.getTracks().forEach(x=>x.stop());if(which==='qr'){qstream=null;qtimer=null;$('qrCamBox').classList.add('hidden');$('torchQR').classList.add('hidden');$('zoomWrap').classList.add('hidden')}else{stream=null;timer=null;$('camBox').classList.add('hidden')}}
+async function configureQrTrack(track){
+ try{
+   const caps=track.getCapabilities?track.getCapabilities():{},settings=track.getSettings?track.getSettings():{},advanced=[];
+   if(caps.focusMode&&Array.isArray(caps.focusMode)&&caps.focusMode.includes('continuous'))advanced.push({focusMode:'continuous'});
+   if(caps.exposureMode&&Array.isArray(caps.exposureMode)&&caps.exposureMode.includes('continuous'))advanced.push({exposureMode:'continuous'});
+   if(advanced.length)await track.applyConstraints({advanced});
+   if(caps.zoom){
+     $('zoomWrap').classList.remove('hidden');$('zoomQR').min=caps.zoom.min||1;$('zoomQR').max=caps.zoom.max||1;$('zoomQR').step=caps.zoom.step||0.1;
+     const start=Math.min(caps.zoom.max||1,Math.max(caps.zoom.min||1,Math.max(1.5,Number(settings.zoom)||1)));$('zoomQR').value=start;
+     try{await track.applyConstraints({advanced:[{zoom:start}]})}catch(e){}
+     $('zoomQR').oninput=async()=>{try{await track.applyConstraints({advanced:[{zoom:Number($('zoomQR').value)}]})}catch(e){}};
+   }
+   if(caps.torch){
+     $('torchQR').classList.remove('hidden');let on=false;
+     $('torchQR').onclick=async()=>{on=!on;try{await track.applyConstraints({advanced:[{torch:on}]});$('torchQR').textContent=on?'🔦 Desligar lanterna':'🔦 Lanterna'}catch(e){on=false}};
+   }
+ }catch(e){}
+}
 async function camera(mode){
  let status=mode==='qr'?$('receiptStatus'):$('msg');
- if(!('BarcodeDetector'in window)){status.textContent='Leitura por câmera não disponível neste navegador.';return}
+ if(!('BarcodeDetector'in window)){status.textContent='Leitura por câmera não disponível neste navegador. Para a NFC-e, use “Ler QR de uma foto”.';return}
  try{
    const fm=await BarcodeDetector.getSupportedFormats(),wanted=mode==='qr'?['qr_code']:['ean_13','ean_8','upc_a','upc_e'];
    const formats=wanted.filter(x=>fm.includes(x)),det=new BarcodeDetector({formats:formats.length?formats:fm});
-   const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
+   const vc=mode==='qr'?{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080},frameRate:{ideal:30}}:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720},frameRate:{ideal:30}};
+   const s=await navigator.mediaDevices.getUserMedia({video:vc,audio:false});
    const v=mode==='qr'?$('qrVideo'):$('video');v.srcObject=s;await v.play();
-   if(mode==='qr'){qstream=s;$('qrCamBox').classList.remove('hidden');status.textContent='Aponte para o QR Code da NFC-e.'}
+   if(mode==='qr'){qstream=s;$('qrCamBox').classList.remove('hidden');status.textContent='Aponte para o QR. Aproxime até ele ocupar boa parte da tela e mantenha firme.';const track=s.getVideoTracks()[0];if(track)await configureQrTrack(track)}
    else{stream=s;$('camBox').classList.remove('hidden');status.textContent='Scanner ativo. Aponte para um produto.'}
-   let ti=setInterval(async()=>{
-     try{
-       const c=await det.detect(v);
-       if(!c.length){if(mode==='product')scanLockedCode='';return}
-       const raw=String(c[0].rawValue||'').trim();
-       if(mode==='qr'){
-         if(scannerBusy)return;scannerBusy=true;
-         try{await processQR(raw)}finally{scannerBusy=false}
-       }else{
-         const code=raw.replace(/\D/g,'');
-         if(!code||scannerBusy||code===scanLockedCode)return;
-         scanLockedCode=code;
-         await handleScannedProduct(code);
-       }
-     }catch(e){}
-   },350);
+   let detecting=false;
+   let ti=setInterval(async()=>{if(detecting)return;detecting=true;try{
+     const c=await det.detect(v);if(!c.length){if(mode==='product')scanLockedCode='';return}
+     const raw=String(c[0].rawValue||'').trim();
+     if(mode==='qr'){if(scannerBusy)return;scannerBusy=true;try{await processQR(raw)}finally{scannerBusy=false}}
+     else{const code=raw.replace(/\D/g,'');if(!code||scannerBusy||code===scanLockedCode)return;scanLockedCode=code;await handleScannedProduct(code)}
+   }catch(e){}finally{detecting=false}},mode==='qr'?180:300);
    if(mode==='qr')qtimer=ti;else timer=ti;
- }catch(e){status.textContent='Não foi possível abrir a câmera.'}
+ }catch(e){status.textContent='Não foi possível abrir a câmera. Para a NFC-e, tente “Ler QR de uma foto”.'}
 }
+async function readQrFromImage(file){
+ if(!file)return;const status=$('receiptStatus');status.innerHTML='<span class="loading"></span>Lendo QR da imagem...';
+ if(!('BarcodeDetector'in window)){status.textContent='Este navegador não disponibiliza o leitor de QR para imagens.';return}
+ try{
+   const fm=await BarcodeDetector.getSupportedFormats(),det=new BarcodeDetector({formats:fm.includes('qr_code')?['qr_code']:fm});
+   const bmp=await createImageBitmap(file);let found=await det.detect(bmp);
+   if(!found.length){
+     const scale=Math.min(2.2,2200/Math.max(bmp.width,bmp.height)),c=document.createElement('canvas');c.width=Math.max(1,Math.round(bmp.width*scale));c.height=Math.max(1,Math.round(bmp.height*scale));
+     const cx=c.getContext('2d');cx.drawImage(bmp,0,0,c.width,c.height);found=await det.detect(c);
+   }
+   if(bmp.close)bmp.close();
+   if(!found.length){status.textContent='Não consegui ler o QR desta foto. Tente uma foto mais próxima, sem reflexo e com o QR inteiro.';return}
+   await processQR(String(found[0].rawValue||'').trim());
+ }catch(e){status.textContent='Não consegui processar essa foto. Tente fotografar novamente.'}
+}
+$('photoQR').onclick=()=>$('qrFile').click();
+$('qrFile').onchange=async e=>{const f=e.target.files&&e.target.files[0];await readQrFromImage(f);e.target.value=''};
+
 $('scan').onclick=()=>camera('product');
 $('stopCam').onclick=()=>stop('product');
 $('scanQR').onclick=()=>camera('qr');
