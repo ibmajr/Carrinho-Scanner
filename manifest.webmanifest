@@ -1,5 +1,5 @@
 {
-  "name": "Carrinho Scanner V9",
+  "name": "Carrinho Scanner V10",
   "short_name": "Carrinho Scanner",
   "start_url": "./",
   "display": "standalone",
@@ -17,5 +17,5 @@
       "type": "image/png"
     }
   ],
-  "description": "Scanner de compras com carrinho editável, QR reforçado e conferência automática de NFC-e."
+  "description": "Scanner de compras com histórico completo, edição, PDF por compra e QR reforçado."
 }

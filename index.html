@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#1769ff"><link rel="manifest" href="manifest.webmanifest">
-<title>Carrinho Scanner V9</title>
+<title>Carrinho Scanner V10</title>
 <style>
 :root{--b:#1769ff;--bg:#f5f7fa;--c:#fff;--t:#17191c;--m:#69727d;--l:#dde3ea;--g:#18763b;--r:#bd2525}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;color:var(--t)}
@@ -38,7 +38,7 @@ canvas{width:100%;height:220px;background:#fff;border:1px solid var(--l);border-
 </style>
 </head>
 <body><div class="app">
-<h1>Carrinho Scanner</h1><div class="sub">V9 • carrinho editável + conferência automática da NFC-e</div>
+<h1>Carrinho Scanner</h1><div class="sub">V10 • histórico completo + PDF de qualquer compra</div>
 
 <div id="activeBanner" class="banner hidden">
  <div class="muted">Compra em andamento</div><div id="activeTitle" class="big"></div><div id="activeDate" class="muted"></div>
@@ -151,7 +151,27 @@ canvas{width:100%;height:220px;background:#fff;border:1px solid var(--l);border-
 </div>
 </section>
 
-<section id="history" class="panel hidden"><div class="card"><div class="row"><strong class="grow">Histórico de compras</strong><button id="backup" class="secondary">Backup</button></div><div id="historyList"></div></div></section>
+<section id="history" class="panel hidden">
+<div class="card">
+  <div class="row"><strong class="grow">Histórico de compras</strong><button id="backup" class="secondary">Backup</button></div>
+  <div class="muted">Toque em uma compra para abrir todos os detalhes.</div>
+  <div id="historyList"></div>
+</div>
+<div id="historyDetail" class="card hidden">
+  <div class="row stack">
+    <div class="grow"><div class="name" id="historyTitle"></div><div class="muted" id="historyMeta"></div></div>
+    <button id="closeHistoryDetail" class="secondary">Fechar</button>
+  </div>
+  <div class="noteMeta" id="historyTotals"></div>
+  <div id="historyItems"></div>
+  <div id="historyConference" class="hidden"></div>
+  <div class="grid" style="margin-top:12px">
+    <button id="historyPdf" class="primary">📄 Gerar PDF da compra</button>
+    <button id="historyReopen" class="secondary">✏️ Reabrir / editar</button>
+  </div>
+  <button id="historyDelete" class="danger" style="width:100%;margin-top:8px">Excluir compra</button>
+</div>
+</section>
 
 <section id="prices" class="panel hidden">
 <div class="card">
@@ -173,11 +193,11 @@ const $=x=>document.getElementById(x), money=n=>new Intl.NumberFormat('pt-BR',{s
 const num=v=>{let s=String(v||'').trim();if(!s)return 0;if(s.includes(','))s=s.replace(/\./g,'').replace(',','.');let n=Number(s);return Number.isFinite(n)?n:0};
 const fmt=s=>new Date(s).toLocaleString('pt-BR');
 const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]));
-// V5 migra automaticamente os dados da V4 para não perder histórico.
-let products=JSON.parse(localStorage.getItem('v9_products')||localStorage.getItem('v6_products')||localStorage.getItem('v5_products')||localStorage.getItem('v4_products')||'{}'),
-    purchases=JSON.parse(localStorage.getItem('v9_purchases')||localStorage.getItem('v6_purchases')||localStorage.getItem('v5_purchases')||localStorage.getItem('v4_purchases')||'[]'),
-    active=JSON.parse(localStorage.getItem('v9_active')||localStorage.getItem('v6_active')||localStorage.getItem('v5_active')||localStorage.getItem('v4_active')||'null'),
-    foundName='',foundSource='',stream=null,timer=null,qstream=null,qtimer=null,currentKey='',lookupSeq=0,scannerBusy=false,scanLockedCode='',lastComparison=null,lastReceipt=null,editingIndex=-1,resumeScannerAfterAdd=false;
+// V10 migra automaticamente os dados anteriores para não perder histórico.
+let products=JSON.parse(localStorage.getItem('v10_products')||localStorage.getItem('v9_products')||localStorage.getItem('v6_products')||localStorage.getItem('v5_products')||localStorage.getItem('v4_products')||'{}'),
+    purchases=JSON.parse(localStorage.getItem('v10_purchases')||localStorage.getItem('v9_purchases')||localStorage.getItem('v6_purchases')||localStorage.getItem('v5_purchases')||localStorage.getItem('v4_purchases')||'[]'),
+    active=JSON.parse(localStorage.getItem('v10_active')||localStorage.getItem('v9_active')||localStorage.getItem('v6_active')||localStorage.getItem('v5_active')||localStorage.getItem('v4_active')||'null'),
+    foundName='',foundSource='',stream=null,timer=null,qstream=null,qtimer=null,currentKey='',lookupSeq=0,scannerBusy=false,scanLockedCode='',lastComparison=null,lastReceipt=null,editingIndex=-1,resumeScannerAfterAdd=false,selectedHistoryIndex=-1;
 
 const verifiedSeed={
  "7896004704623":{name:"Maleato de Dexclorfeniramina + Betametasona EMS 120 ml",source:"Cadastro verificado"},
@@ -188,9 +208,9 @@ const verifiedSeed={
 };
 
 function save(){
- localStorage.setItem('v9_products',JSON.stringify(products));
- localStorage.setItem('v9_purchases',JSON.stringify(purchases));
- localStorage.setItem('v9_active',JSON.stringify(active));
+ localStorage.setItem('v10_products',JSON.stringify(products));
+ localStorage.setItem('v10_purchases',JSON.stringify(purchases));
+ localStorage.setItem('v10_active',JSON.stringify(active));
 }
 function historyFor(code,name){
   const key=code||name, arr=[];
@@ -371,9 +391,94 @@ $('saveEdit').onclick=()=>{
  if(x.code)products[x.code]={name:x.name,source:'Editado por você'};
  save();editingIndex=-1;$('editPanel').classList.add('hidden');renderCart();
 };
-$('finish').onclick=()=>{if(!active||!active.items.length)return;const pend=active.items.filter(x=>x.pendingPrice);if(pend.length&&!confirm(pend.length+' item(ns) ainda estão sem valor. Finalizar mesmo assim?'))return;active.finished=new Date().toISOString();active.estimatedTotal=active.items.reduce((s,x)=>s+(x.total||0),0);purchases.unshift(active);active=null;save();update();document.querySelector('[data-tab="receipt"]').click()};
+$('finish').onclick=()=>{if(!active||!active.items.length)return;const pend=active.items.filter(x=>x.pendingPrice);if(pend.length&&!confirm(pend.length+' item(ns) ainda estão sem valor. Finalizar mesmo assim?'))return;active.finished=new Date().toISOString();active.estimatedTotal=active.items.reduce((s,x)=>s+(x.total||0),0);delete active._reopened;purchases.unshift(active);active=null;selectedHistoryIndex=-1;save();update();document.querySelector('[data-tab="receipt"]').click()};
 $('cancel').onclick=()=>{if(confirm('Cancelar esta compra?')){active=null;save();update()}};
-function renderHistory(){let b=$('historyList');b.innerHTML='';if(!purchases.length){b.innerHTML='<div class="muted">Nenhuma compra salva.</div>';return}purchases.forEach(p=>{let r=document.createElement('div');r.className='item';r.innerHTML=`<div><div class="name">${p.store}</div><div class="muted">${fmt(p.started)} • ${p.items.length} produtos</div></div><div class="right"><div class="name">${money(p.receiptTotal??p.estimatedTotal)}</div><div class="muted">estimado ${money(p.estimatedTotal)}</div></div>`;b.appendChild(r)})}
+function purchaseTotal(p){return Number(p.receiptTotal??p.estimatedTotal??(p.items||[]).reduce((s,x)=>s+(Number(x.total)||0),0))}
+function buildPurchasePdf(p){
+ const itemRows=(p.items||[]).map((x,i)=>{
+   const qtd=x.byWeight?((Number(x.kg)>0?x.kg:'—')+' kg'):(x.qty||1)+' un';
+   const unit=x.byWeight?money(x.price)+'/kg':money(x.price);
+   return `<tr><td>${i+1}</td><td>${esc(x.name)}</td><td>${esc(qtd)}</td><td>${unit}</td><td>${money(x.total||0)}</td></tr>`;
+ }).join('');
+ const conf=p.conference;
+ let confHtml='';
+ if(conf){
+   const rows=(conf.rows||[]).map(x=>`<tr><td>${x.status==='ok'?'✓':'⚠'}</td><td>${esc(x.name)}</td><td>${x.status==='ok'?'Conferido':(x.reasons||[]).map(esc).join('<br>')}</td></tr>`).join('');
+   confHtml=`<h2>Conferência da NFC-e</h2><p><b>Conferidos:</b> ${conf.ok||0} &nbsp; <b>Divergências:</b> ${conf.bad||0}</p><table><tr><th></th><th>Produto</th><th>Resultado</th></tr>${rows}</table>`;
+ }
+ const meta=p.receiptMeta||{};
+ return `<!doctype html><html><head><meta charset="utf-8"><title>Compra - ${esc(p.store||'')}</title><style>
+ body{font-family:Arial,sans-serif;color:#111;margin:28px;font-size:12px}h1{font-size:20px}h2{font-size:15px;margin-top:22px}
+ table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border:1px solid #bbb;padding:6px;text-align:left;vertical-align:top}
+ .total{font-size:18px;font-weight:bold;margin:12px 0}@media print{button{display:none}body{margin:12mm}}</style></head><body>
+ <h1>Relatório da Compra</h1>
+ <b>Mercado:</b> ${esc(p.store||'')}<br>
+ <b>Data/hora:</b> ${esc(fmt(p.started))}<br>
+ ${p.finished?'<b>Finalizada:</b> '+esc(fmt(p.finished))+'<br>':''}
+ ${meta.issuer?'<b>Emitente NFC-e:</b> '+esc(meta.issuer)+'<br>':''}
+ ${meta.cnpj?'<b>CNPJ:</b> '+esc(meta.cnpj)+'<br>':''}
+ ${meta.number?'<b>NFC-e:</b> '+esc(meta.number)+(meta.series?' • Série '+esc(meta.series):'')+'<br>':''}
+ ${p.key?'<b>Chave:</b> '+esc(p.key)+'<br>':''}
+ <div class="total">Total da compra: ${money(purchaseTotal(p))}</div>
+ <h2>Produtos</h2>
+ <table><tr><th>#</th><th>Produto</th><th>Quantidade</th><th>Valor unitário</th><th>Total</th></tr>${itemRows}</table>
+ ${confHtml}
+ <p>Gerado em ${esc(fmt(new Date().toISOString()))}</p>
+ <button onclick="window.print()">Salvar / imprimir PDF</button>
+ <script>setTimeout(()=>window.print(),400)<\/script></body></html>`;
+}
+function generatePurchasePdf(p){
+ const w=window.open('','_blank');
+ if(!w){alert('Permita pop-ups para gerar o PDF.');return}
+ w.document.write(buildPurchasePdf(p));w.document.close();
+}
+function openHistory(i){
+ if(!purchases[i])return;selectedHistoryIndex=i;const p=purchases[i];
+ $('historyDetail').classList.remove('hidden');
+ $('historyTitle').textContent=p.store||'Compra';
+ $('historyMeta').textContent=fmt(p.started)+' • '+(p.items||[]).length+' item(ns)';
+ $('historyTotals').innerHTML='<b>Total:</b> '+money(purchaseTotal(p))+(p.receiptTotal!=null?'<br><span class="muted">Total da NFC-e: '+money(p.receiptTotal)+'</span>':'');
+ const box=$('historyItems');box.innerHTML='';
+ (p.items||[]).forEach((x,n)=>{
+   const d=document.createElement('div');d.className='item';
+   const detail=x.byWeight?((x.kg||'—')+' kg × '+money(x.price)+'/kg'):((x.qty||1)+' × '+money(x.price));
+   d.innerHTML=`<div><div class="name">${n+1}. ${esc(x.name)}</div><div class="muted">${detail}</div></div><div class="right"><div class="name">${money(x.total||0)}</div>${x.code?'<div class="muted">EAN '+esc(x.code)+'</div>':''}</div>`;
+   box.appendChild(d);
+ });
+ const c=$('historyConference');
+ if(p.conference){
+   c.classList.remove('hidden');
+   c.innerHTML=`<div class="noteMeta"><b>Conferência da NFC-e</b><br>✓ ${p.conference.ok||0} conferido(s) • ⚠ ${p.conference.bad||0} divergência(s)</div>`;
+ }else{c.classList.add('hidden');c.innerHTML=''}
+ $('historyDetail').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function renderHistory(){
+ let b=$('historyList');b.innerHTML='';
+ if(!purchases.length){b.innerHTML='<div class="muted">Nenhuma compra salva.</div>';$('historyDetail').classList.add('hidden');selectedHistoryIndex=-1;return}
+ purchases.forEach((p,i)=>{
+   let r=document.createElement('div');r.className='item';
+   r.innerHTML=`<div class="grow"><div class="name">${esc(p.store||'Compra')}</div><div class="muted">${fmt(p.started)} • ${(p.items||[]).length} produtos</div></div><div class="right"><div class="name">${money(purchaseTotal(p))}</div><button class="secondary viewHistory" style="margin-top:6px">Abrir</button></div>`;
+   r.querySelector('.viewHistory').onclick=()=>openHistory(i);
+   r.onclick=e=>{if(!e.target.closest('button'))openHistory(i)};
+   b.appendChild(r);
+ });
+ if(selectedHistoryIndex>=purchases.length){selectedHistoryIndex=-1;$('historyDetail').classList.add('hidden')}
+}
+$('closeHistoryDetail').onclick=()=>{selectedHistoryIndex=-1;$('historyDetail').classList.add('hidden')};
+$('historyPdf').onclick=()=>{if(selectedHistoryIndex>=0&&purchases[selectedHistoryIndex])generatePurchasePdf(purchases[selectedHistoryIndex])};
+$('historyDelete').onclick=()=>{
+ if(selectedHistoryIndex<0||!purchases[selectedHistoryIndex])return;
+ const p=purchases[selectedHistoryIndex];
+ if(!confirm('Excluir a compra de '+p.store+'?'))return;
+ purchases.splice(selectedHistoryIndex,1);selectedHistoryIndex=-1;save();$('historyDetail').classList.add('hidden');update();
+};
+$('historyReopen').onclick=()=>{
+ if(selectedHistoryIndex<0||!purchases[selectedHistoryIndex])return;
+ if(active&&!confirm('Já existe uma compra em andamento. Substituir pela compra do histórico?'))return;
+ const p=purchases.splice(selectedHistoryIndex,1)[0];
+ active=JSON.parse(JSON.stringify(p));active._reopened=true;delete active.finished;
+ selectedHistoryIndex=-1;save();$('historyDetail').classList.add('hidden');update();document.querySelector('[data-tab="buy"]').click();
+};
 function buildPriceMap(){let map={};purchases.forEach(p=>p.items.filter(x=>Number(x.price)>0).forEach(x=>{let k=x.code||x.name;if(!map[k])map[k]={key:k,name:x.name,a:[]};map[k].a.push({date:p.started,store:p.store,price:x.price,unit:x.byWeight?'kg':'un'})}));Object.values(map).forEach(x=>x.a.sort((a,b)=>new Date(a.date)-new Date(b.date)));return map}
 function renderPrices(){let map=buildPriceMap(),b=$('priceList');b.innerHTML='';let a=Object.values(map);if(!a.length){b.innerHTML='<div class="muted">Nenhum preço registrado.</div>';return}a.forEach(x=>{let e=x.a[x.a.length-1],min=Math.min(...x.a.map(y=>y.price)),r=document.createElement('div');r.className='item';r.innerHTML=`<div><div class="name">${x.name}</div><div class="muted">${x.a.length} registro(s) • menor ${money(min)}/${e.unit}</div></div><div class="right"><div class="name">${money(e.price)}/${e.unit}</div><button class="secondary" style="margin-top:6px">Ver gráfico</button></div>`;r.querySelector('button').onclick=()=>showChart(x);b.appendChild(r)})}
 function showChart(x){
@@ -488,9 +593,9 @@ function normalizeOfficialUrl(raw){
  if(/^http:\/\//i.test(u))u='https://'+u.slice(7);
  return u;
 }
-function backendBase(){return (localStorage.getItem('v9_nfce_backend')||'').trim().replace(/\/$/,'')}
+function backendBase(){return (localStorage.getItem('v10_nfce_backend')||localStorage.getItem('v9_nfce_backend')||'').trim().replace(/\/$/,'')}
 function updateBackendStatus(){const u=backendBase();$('backendUrl').value=u;$('backendStatus').textContent=u?'✓ Servidor configurado: '+u:'Servidor ainda não configurado. A NFC-e pode ser aberta, mas a importação automática depende deste servidor.'}
-$('saveBackend').onclick=()=>{let u=$('backendUrl').value.trim().replace(/\/$/,'');if(u&&!/^https:\/\//i.test(u)){alert('Use um endereço https://');return}if(u)localStorage.setItem('v9_nfce_backend',u);else localStorage.removeItem('v9_nfce_backend');updateBackendStatus()};
+$('saveBackend').onclick=()=>{let u=$('backendUrl').value.trim().replace(/\/$/,'');if(u&&!/^https:\/\//i.test(u)){alert('Use um endereço https://');return}if(u)localStorage.setItem('v10_nfce_backend',u);else{localStorage.removeItem('v10_nfce_backend');localStorage.removeItem('v9_nfce_backend');}updateBackendStatus()};
 async function fetchReceiptHtml(url){
  const b=backendBase();
  if(b){
@@ -555,7 +660,7 @@ $('pdfReport').onclick=()=>{
  w.document.close();
 };
 
-$('backup').onclick=()=>{let blob=new Blob([JSON.stringify({date:new Date().toISOString(),products,purchases},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='backup-carrinho-scanner-v9.json';a.click()};
+$('backup').onclick=()=>{let blob=new Blob([JSON.stringify({date:new Date().toISOString(),products,purchases},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='backup-carrinho-scanner-v10.json';a.click()};
 document.querySelectorAll('.tab').forEach(x=>x.onclick=()=>{document.querySelectorAll('.tab').forEach(y=>y.classList.remove('active'));document.querySelectorAll('.panel').forEach(y=>y.classList.add('hidden'));x.classList.add('active');$(x.dataset.tab).classList.remove('hidden');update()});
 async function stop(which){let s=which==='qr'?qstream:stream,t=which==='qr'?qtimer:timer;if(t)clearInterval(t);if(s)s.getTracks().forEach(x=>x.stop());if(which==='qr'){qstream=null;qtimer=null;$('qrCamBox').classList.add('hidden');$('torchQR').classList.add('hidden');$('zoomWrap').classList.add('hidden')}else{stream=null;timer=null;$('camBox').classList.add('hidden')}}
 async function configureQrTrack(track){
