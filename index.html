@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#1769ff"><link rel="manifest" href="manifest.webmanifest">
-<title>Carrinho Scanner V11</title>
+<title>Carrinho Scanner V13</title>
 <style>
 :root{--b:#1769ff;--bg:#f5f7fa;--c:#fff;--t:#17191c;--m:#69727d;--l:#dde3ea;--g:#18763b;--r:#bd2525}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;color:var(--t)}
@@ -38,7 +38,7 @@ canvas{width:100%;height:220px;background:#fff;border:1px solid var(--l);border-
 </style>
 </head>
 <body><div class="app">
-<h1>Carrinho Scanner</h1><div class="sub">V11 • escanear → preencher → OK → lista</div>
+<h1>Carrinho Scanner</h1><div class="sub">V13 • carrinho + lista de compras</div>
 
 <div id="activeBanner" class="banner hidden">
  <div class="muted">Compra em andamento</div><div id="activeTitle" class="big"></div><div id="activeDate" class="muted"></div>
@@ -47,6 +47,7 @@ canvas{width:100%;height:220px;background:#fff;border:1px solid var(--l);border-
 <div class="tabs">
 <button class="tab active" data-tab="buy">Compra</button>
 <button class="tab" data-tab="receipt">Cupom</button>
+<button class="tab" data-tab="wishlist">Lista</button>
 <button class="tab" data-tab="history">Histórico</button>
 <button class="tab" data-tab="prices">Preços</button>
 </div>
@@ -151,6 +152,18 @@ canvas{width:100%;height:220px;background:#fff;border:1px solid var(--l);border-
 </div>
 </section>
 
+<section id="wishlist" class="panel hidden">
+<div class="card">
+  <strong>Lista de compras</strong>
+  <div class="muted" style="margin-top:4px">Anote o que precisa comprar. Quando um produto correspondente for confirmado no carrinho, o app tenta marcar automaticamente.</div>
+  <div class="row" style="margin-top:12px">
+    <input id="wishlistInput" class="grow" placeholder="Ex.: Leite" autocomplete="off">
+    <button id="wishlistAdd" class="primary">Adicionar</button>
+  </div>
+  <div id="wishlistItems" style="margin-top:10px"></div>
+  <button id="wishlistClear" class="secondary" style="width:100%;margin-top:10px">Limpar comprados</button>
+</div>
+</section>
 <section id="history" class="panel hidden">
 <div class="card">
   <div class="row"><strong class="grow">Histórico de compras</strong><button id="backup" class="secondary">Backup</button></div>
@@ -194,10 +207,11 @@ const num=v=>{let s=String(v||'').trim();if(!s)return 0;if(s.includes(','))s=s.r
 const fmt=s=>new Date(s).toLocaleString('pt-BR');
 const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]));
 // V11 migra automaticamente os dados anteriores para não perder histórico.
-let products=JSON.parse(localStorage.getItem('v11_products')||localStorage.getItem('v10_products')||localStorage.getItem('v9_products')||localStorage.getItem('v6_products')||localStorage.getItem('v5_products')||localStorage.getItem('v4_products')||'{}'),
-    purchases=JSON.parse(localStorage.getItem('v11_purchases')||localStorage.getItem('v10_purchases')||localStorage.getItem('v9_purchases')||localStorage.getItem('v6_purchases')||localStorage.getItem('v5_purchases')||localStorage.getItem('v4_purchases')||'[]'),
-    active=JSON.parse(localStorage.getItem('v11_active')||localStorage.getItem('v10_active')||localStorage.getItem('v9_active')||localStorage.getItem('v6_active')||localStorage.getItem('v5_active')||localStorage.getItem('v4_active')||'null'),
+let products=JSON.parse(localStorage.getItem('v13_products')||localStorage.getItem('v11_products')||localStorage.getItem('v10_products')||localStorage.getItem('v9_products')||localStorage.getItem('v6_products')||localStorage.getItem('v5_products')||localStorage.getItem('v4_products')||'{}'),
+    purchases=JSON.parse(localStorage.getItem('v13_purchases')||localStorage.getItem('v11_purchases')||localStorage.getItem('v10_purchases')||localStorage.getItem('v9_purchases')||localStorage.getItem('v6_purchases')||localStorage.getItem('v5_purchases')||localStorage.getItem('v4_purchases')||'[]'),
+    active=JSON.parse(localStorage.getItem('v13_active')||localStorage.getItem('v11_active')||localStorage.getItem('v10_active')||localStorage.getItem('v9_active')||localStorage.getItem('v6_active')||localStorage.getItem('v5_active')||localStorage.getItem('v4_active')||'null'),
     foundName='',foundSource='',stream=null,timer=null,qstream=null,qtimer=null,currentKey='',lookupSeq=0,scannerBusy=false,scanLockedCode='',lastComparison=null,lastReceipt=null,editingIndex=-1,resumeScannerAfterAdd=false,selectedHistoryIndex=-1;
+let wishlist=JSON.parse(localStorage.getItem('v13_wishlist')||'[]');
 
 const verifiedSeed={
  "7896004704623":{name:"Maleato de Dexclorfeniramina + Betametasona EMS 120 ml",source:"Cadastro verificado"},
@@ -208,9 +222,10 @@ const verifiedSeed={
 };
 
 function save(){
- localStorage.setItem('v11_products',JSON.stringify(products));
- localStorage.setItem('v11_purchases',JSON.stringify(purchases));
- localStorage.setItem('v11_active',JSON.stringify(active));
+ localStorage.setItem('v13_products',JSON.stringify(products));
+ localStorage.setItem('v13_purchases',JSON.stringify(purchases));
+ localStorage.setItem('v13_active',JSON.stringify(active));
+ localStorage.setItem('v13_wishlist',JSON.stringify(wishlist));
 }
 function historyFor(code,name){
   const key=code||name, arr=[];
@@ -238,7 +253,40 @@ function updateCurrentPriceComparison(){
   else if(d>0){el.className='bad';el.textContent=`Hoje está ${money(d)} mais caro (+${pct.toFixed(1).replace('.',',')}%).`}
   else{el.className='good';el.textContent=`Hoje está ${money(Math.abs(d))} mais barato (${pct.toFixed(1).replace('.',',')}%).`}
 }
+function wishlistWords(s){
+ return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/).filter(x=>x.length>1);
+}
+function wishlistMatch(wanted,product){
+ const a=wishlistWords(wanted),b=wishlistWords(product);
+ if(!a.length||!b.length)return false;
+ return a.every(w=>b.some(x=>x===w||x.startsWith(w)||w.startsWith(x)));
+}
+function autoCheckWishlist(productName){
+ let changed=false;
+ wishlist.forEach(x=>{if(!x.checked&&wishlistMatch(x.name,productName)){x.checked=true;changed=true}});
+ if(changed){save();renderWishlist()}
+}
+function renderWishlist(){
+ const box=$('wishlistItems');if(!box)return;box.innerHTML='';
+ if(!wishlist.length){box.innerHTML='<div class="muted">Sua lista está vazia.</div>';return}
+ wishlist.forEach((x,i)=>{
+   const row=document.createElement('div');row.className='item';
+   row.innerHTML=`<label class="row grow" style="cursor:pointer;min-width:0"><input type="checkbox" class="wishCheck" ${x.checked?'checked':''} style="width:24px;height:24px;flex:0 0 auto"><span class="name grow" style="${x.checked?'text-decoration:line-through;opacity:.55':''}">${esc(x.name)}</span></label><button class="danger wishDelete" aria-label="Excluir item">×</button>`;
+   row.querySelector('.wishCheck').onchange=e=>{wishlist[i].checked=e.target.checked;save();renderWishlist()};
+   row.querySelector('.wishDelete').onclick=()=>{wishlist.splice(i,1);save();renderWishlist()};
+   box.appendChild(row);
+ });
+}
+function addWishlist(){
+ const input=$('wishlistInput'),name=(input.value||'').trim();if(!name)return;
+ wishlist.push({name,checked:false});input.value='';save();renderWishlist();input.focus();
+}
+$('wishlistAdd').onclick=addWishlist;
+$('wishlistInput').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addWishlist()}});
+$('wishlistClear').onclick=()=>{wishlist=wishlist.filter(x=>!x.checked);save();renderWishlist()};
+
 function update(){
+ renderWishlist();
  const on=!!active;$('startCard').classList.toggle('hidden',on);$('shopping').classList.toggle('hidden',!on);$('activeBanner').classList.toggle('hidden',!on);
  if(on){$('activeTitle').textContent=active.store;$('activeDate').textContent='Iniciada em '+fmt(active.started);renderCart()}
  renderHistory();renderPrices();
@@ -361,7 +409,7 @@ $('weightToggle').onchange=()=>{$('unit').classList.toggle('hidden',$('weightTog
 $('add').onclick=()=>{if(!active)return;let code=$('ean').value.trim(),name=foundName||$('name').value.trim();if(!name){$('msg').textContent='Identifique o produto.';return}if(!foundName&&code)products[code]={name,source:'Cadastrado por você'};let w=$('weightToggle').checked,item;
 if(w){let p=num($('kgprice').value),kg=num($('kg').value);if(p<=0){$('msg').textContent='Informe o preço/kg.';return}item={code,name,byWeight:true,price:p,kg,pending:kg<=0,total:kg>0?p*kg:0}}
 else{let p=num($('price').value),q=num($('qty').value);if(p<=0){$('msg').textContent='Informe o valor do produto.';return}if(q<=0){$('msg').textContent='Informe uma quantidade válida.';return}item={code,name,byWeight:false,price:p,qty:q,pending:false,pendingPrice:false,total:p*q}}
-active.items.push(item);save();['ean','name','price','kgprice','kg'].forEach(i=>$(i).value='');$('qty').value=1;$('manual').classList.add('hidden');$('lookup').textContent='';setSource('');$('priceHint').classList.add('hidden');foundName='';foundSource='';currentKey='';renderCart();$('msg').textContent='✓ Produto adicionado à lista.';const restart=resumeScannerAfterAdd;resumeScannerAfterAdd=false;if(restart)setTimeout(()=>camera('product'),250)};
+active.items.push(item);autoCheckWishlist(name);save();['ean','name','price','kgprice','kg'].forEach(i=>$(i).value='');$('qty').value=1;$('manual').classList.add('hidden');$('lookup').textContent='';setSource('');$('priceHint').classList.add('hidden');foundName='';foundSource='';currentKey='';renderCart();$('msg').textContent='✓ Produto adicionado à lista.';const restart=resumeScannerAfterAdd;resumeScannerAfterAdd=false;if(restart)setTimeout(()=>camera('product'),250)};
 function renderCart(){
  if(!active)return;
  let b=$('cart');b.innerHTML='';
@@ -596,9 +644,9 @@ function normalizeOfficialUrl(raw){
  if(/^http:\/\//i.test(u))u='https://'+u.slice(7);
  return u;
 }
-function backendBase(){return (localStorage.getItem('v11_nfce_backend')||localStorage.getItem('v10_nfce_backend')||localStorage.getItem('v9_nfce_backend')||'').trim().replace(/\/$/,'')}
+function backendBase(){return (localStorage.getItem('v13_nfce_backend')||localStorage.getItem('v11_nfce_backend')||localStorage.getItem('v10_nfce_backend')||localStorage.getItem('v9_nfce_backend')||'').trim().replace(/\/$/,'')}
 function updateBackendStatus(){const u=backendBase();$('backendUrl').value=u;$('backendStatus').textContent=u?'✓ Servidor configurado: '+u:'Servidor ainda não configurado. A NFC-e pode ser aberta, mas a importação automática depende deste servidor.'}
-$('saveBackend').onclick=()=>{let u=$('backendUrl').value.trim().replace(/\/$/,'');if(u&&!/^https:\/\//i.test(u)){alert('Use um endereço https://');return}if(u)localStorage.setItem('v11_nfce_backend',u);else{localStorage.removeItem('v11_nfce_backend');localStorage.removeItem('v10_nfce_backend');localStorage.removeItem('v9_nfce_backend');}updateBackendStatus()};
+$('saveBackend').onclick=()=>{let u=$('backendUrl').value.trim().replace(/\/$/,'');if(u&&!/^https:\/\//i.test(u)){alert('Use um endereço https://');return}if(u)localStorage.setItem('v13_nfce_backend',u);else{localStorage.removeItem('v13_nfce_backend');localStorage.removeItem('v11_nfce_backend');localStorage.removeItem('v10_nfce_backend');localStorage.removeItem('v9_nfce_backend');}updateBackendStatus()};
 async function fetchReceiptHtml(url){
  const b=backendBase();
  if(b){
@@ -663,7 +711,7 @@ $('pdfReport').onclick=()=>{
  w.document.close();
 };
 
-$('backup').onclick=()=>{let blob=new Blob([JSON.stringify({date:new Date().toISOString(),products,purchases},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='backup-carrinho-scanner-v10.json';a.click()};
+$('backup').onclick=()=>{let blob=new Blob([JSON.stringify({date:new Date().toISOString(),products,purchases},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='backup-carrinho-scanner-v13.json';a.click()};
 document.querySelectorAll('.tab').forEach(x=>x.onclick=()=>{document.querySelectorAll('.tab').forEach(y=>y.classList.remove('active'));document.querySelectorAll('.panel').forEach(y=>y.classList.add('hidden'));x.classList.add('active');$(x.dataset.tab).classList.remove('hidden');update()});
 async function stop(which){let s=which==='qr'?qstream:stream,t=which==='qr'?qtimer:timer;if(t)clearInterval(t);if(s)s.getTracks().forEach(x=>x.stop());if(which==='qr'){qstream=null;qtimer=null;$('qrCamBox').classList.add('hidden');$('torchQR').classList.add('hidden');$('zoomWrap').classList.add('hidden')}else{stream=null;timer=null;$('camBox').classList.add('hidden')}}
 async function configureQrTrack(track){
