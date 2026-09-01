@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#1769ff"><link rel="manifest" href="manifest.webmanifest">
-<title>Carrinho Scanner V14</title>
+<title>Carrinho Scanner V15</title>
 <style>
 :root{--b:#1769ff;--bg:#f5f7fa;--c:#fff;--t:#17191c;--m:#69727d;--l:#dde3ea;--g:#18763b;--r:#bd2525}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;color:var(--t)}
@@ -49,7 +49,7 @@ canvas{width:100%;height:220px;background:#fff;border:1px solid var(--l);border-
 </style>
 </head>
 <body><div class="app">
-<h1>Carrinho Scanner</h1><div class="sub">V14 • compra rápida + conferência</div>
+<h1>Carrinho Scanner</h1><div class="sub">V15 • compra rápida + histórico de preços</div>
 
 <div id="activeBanner" class="banner hidden">
  <div class="muted">Compra em andamento</div><div id="activeTitle" class="big"></div><div id="activeDate" class="muted"></div>
@@ -109,8 +109,8 @@ canvas{width:100%;height:220px;background:#fff;border:1px solid var(--l);border-
    </div>
    <label style="display:flex;gap:8px;align-items:center"><input id="promoToggle" type="checkbox" style="width:20px"> 📱 Tem preço de app/clube</label>
    <div id="promoBox" class="promoBox hidden">
-     <div class="grid"><div><label>Preço normal</label><input id="normalPrice" inputmode="decimal"></div><div><label>Preço com app/clube</label><input id="clubPrice" inputmode="decimal"></div></div>
-     <div class="muted">⚠️ O preço com app/clube será o valor esperado na conferência.</div>
+     <label>Preço sem app/clube</label><input id="normalPrice" inputmode="decimal" placeholder="R$ 0,00">
+     <div class="muted">📱 O valor principal acima já é o preço com app/clube.</div>
    </div>
    <div id="msg" class="muted" style="margin:8px 0"></div>
    <button id="add" class="primary" style="width:100%">ADICIONAR</button>
@@ -130,7 +130,15 @@ canvas{width:100%;height:220px;background:#fff;border:1px solid var(--l);border-
    <div class="editActions"><button id="saveEdit" class="primary grow">Salvar alteração</button><button id="cancelEdit" class="secondary grow">Cancelar</button></div>
  </div>
 </div>
-<div class="card"><div class="muted">Total estimado</div><div id="total" class="total">R$ 0,00</div><div id="cart"></div><button id="finish" class="ok" style="width:100%;margin-top:10px">Finalizar e conferir cupom</button><button id="cancel" class="danger" style="width:100%;margin-top:7px">Cancelar compra</button></div>
+<div class="card">
+<div class="muted">Resumo da compra</div>
+<div class="grid" style="margin-top:5px">
+ <div><div class="muted">Sem desconto</div><div id="totalNormal" class="name">R$ 0,00</div></div>
+ <div><div class="muted">Com desconto</div><div id="total" class="total" style="font-size:25px">R$ 0,00</div></div>
+</div>
+<div id="totalEconomy" class="good" style="margin:4px 0 10px"></div>
+<input id="cartSearch" placeholder="🔎 Buscar item nesta compra para editar ou remover" autocomplete="off">
+<div id="cart"></div><button id="finish" class="ok" style="width:100%;margin-top:10px">Finalizar e conferir cupom</button><button id="cancel" class="danger" style="width:100%;margin-top:7px">Cancelar compra</button></div>
 </div>
 </section>
 
@@ -223,13 +231,9 @@ canvas{width:100%;height:220px;background:#fff;border:1px solid var(--l);border-
 <section id="prices" class="panel hidden">
 <div class="card">
 <strong>Histórico de preços</strong>
-<div class="muted">Toque em um produto para ver a evolução.</div>
+<div class="muted">Busque um produto já comprado e toque em “Ver histórico”.</div>
+<input id="priceSearch" placeholder="🔎 Buscar produto comprado" autocomplete="off" style="margin-top:9px">
 <div id="priceList"></div>
-</div>
-<div id="chartCard" class="card hidden">
-<div class="row"><div class="grow"><div class="name" id="chartTitle"></div><div class="muted" id="chartSubtitle"></div></div><button id="closeChart" class="secondary">Fechar</button></div>
-<canvas id="chart" width="700" height="220"></canvas>
-<div id="chartRows"></div>
 </div>
 </section>
 </div>
@@ -241,12 +245,12 @@ const num=v=>{let s=String(v||'').trim();if(!s)return 0;if(s.includes(','))s=s.r
 const fmt=s=>new Date(s).toLocaleString('pt-BR');
 const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]));
 // V11 migra automaticamente os dados anteriores para não perder histórico.
-let products=JSON.parse(localStorage.getItem('v14_products')||localStorage.getItem('v13_products')||localStorage.getItem('v11_products')||localStorage.getItem('v10_products')||localStorage.getItem('v9_products')||localStorage.getItem('v6_products')||localStorage.getItem('v5_products')||localStorage.getItem('v4_products')||'{}'),
-    purchases=JSON.parse(localStorage.getItem('v14_purchases')||localStorage.getItem('v13_purchases')||localStorage.getItem('v11_purchases')||localStorage.getItem('v10_purchases')||localStorage.getItem('v9_purchases')||localStorage.getItem('v6_purchases')||localStorage.getItem('v5_purchases')||localStorage.getItem('v4_purchases')||'[]'),
-    active=JSON.parse(localStorage.getItem('v14_active')||localStorage.getItem('v13_active')||localStorage.getItem('v11_active')||localStorage.getItem('v10_active')||localStorage.getItem('v9_active')||localStorage.getItem('v6_active')||localStorage.getItem('v5_active')||localStorage.getItem('v4_active')||'null'),
+let products=JSON.parse(localStorage.getItem('v15_products')||localStorage.getItem('v14_products')||localStorage.getItem('v13_products')||localStorage.getItem('v11_products')||localStorage.getItem('v10_products')||localStorage.getItem('v9_products')||localStorage.getItem('v6_products')||localStorage.getItem('v5_products')||localStorage.getItem('v4_products')||'{}'),
+    purchases=JSON.parse(localStorage.getItem('v15_purchases')||localStorage.getItem('v14_purchases')||localStorage.getItem('v13_purchases')||localStorage.getItem('v11_purchases')||localStorage.getItem('v10_purchases')||localStorage.getItem('v9_purchases')||localStorage.getItem('v6_purchases')||localStorage.getItem('v5_purchases')||localStorage.getItem('v4_purchases')||'[]'),
+    active=JSON.parse(localStorage.getItem('v15_active')||localStorage.getItem('v14_active')||localStorage.getItem('v13_active')||localStorage.getItem('v11_active')||localStorage.getItem('v10_active')||localStorage.getItem('v9_active')||localStorage.getItem('v6_active')||localStorage.getItem('v5_active')||localStorage.getItem('v4_active')||'null'),
     foundName='',foundSource='',stream=null,timer=null,qstream=null,qtimer=null,currentKey='',lookupSeq=0,scannerBusy=false,scanLockedCode='',lastComparison=null,lastReceipt=null,editingIndex=-1,resumeScannerAfterAdd=false,selectedHistoryIndex=-1;
 let entryWithoutCode=false;
-let wishlist=JSON.parse(localStorage.getItem('v14_wishlist')||localStorage.getItem('v13_wishlist')||'[]');
+let wishlist=JSON.parse(localStorage.getItem('v15_wishlist')||localStorage.getItem('v14_wishlist')||localStorage.getItem('v13_wishlist')||'[]');
 
 const verifiedSeed={
  "7896004704623":{name:"Maleato de Dexclorfeniramina + Betametasona EMS 120 ml",source:"Cadastro verificado"},
@@ -257,10 +261,10 @@ const verifiedSeed={
 };
 
 function save(){
- localStorage.setItem('v14_products',JSON.stringify(products));
- localStorage.setItem('v14_purchases',JSON.stringify(purchases));
- localStorage.setItem('v14_active',JSON.stringify(active));
- localStorage.setItem('v14_wishlist',JSON.stringify(wishlist));
+ localStorage.setItem('v15_products',JSON.stringify(products));
+ localStorage.setItem('v15_purchases',JSON.stringify(purchases));
+ localStorage.setItem('v15_active',JSON.stringify(active));
+ localStorage.setItem('v15_wishlist',JSON.stringify(wishlist));
 }
 function historyFor(code,name){
   const key=code||name, arr=[];
@@ -346,21 +350,25 @@ async function fetchJSON(url,ms=5000){
  }catch(e){return null}finally{clearTimeout(to)}
 }
 async function queryOpenFacts(code){
- // Uma chamada com product_type=all pode redirecionar entre Food/Beauty/Products/Pet.
+ // Mantém todas as fontes, mas consulta em paralelo para ganhar velocidade sem reduzir cobertura.
  const urls=[
    ['Open Facts','https://world.openfoodfacts.org/api/v2/product/'+encodeURIComponent(code)+'.json?fields=code,product_name,product_name_pt,generic_name,generic_name_pt,brands,quantity&product_type=all'],
    ['Open Products Facts','https://world.openproductsfacts.org/api/v2/product/'+encodeURIComponent(code)+'.json?fields=code,product_name,product_name_pt,generic_name,generic_name_pt,brands,quantity'],
    ['Open Beauty Facts','https://world.openbeautyfacts.org/api/v2/product/'+encodeURIComponent(code)+'.json?fields=code,product_name,product_name_pt,generic_name,generic_name_pt,brands,quantity'],
    ['Open Pet Food Facts','https://world.openpetfoodfacts.org/api/v2/product/'+encodeURIComponent(code)+'.json?fields=code,product_name,product_name_pt,generic_name,generic_name_pt,brands,quantity']
  ];
- for(const [source,url] of urls){
-   const j=await fetchJSON(url);
-   if(j && (j.status===1 || j.product)){
-     const n=normalizeName(j.product||{});
-     if(n)return {name:n,source};
-   }
- }
- return null;
+ return await new Promise(resolve=>{
+   let pending=urls.length,done=false;
+   urls.forEach(async ([source,url])=>{
+     const j=await fetchJSON(url);
+     if(!done&&j&&(j.status===1||j.product)){
+       const n=normalizeName(j.product||{});
+       if(n){done=true;resolve({name:n,source});return}
+     }
+     pending--;
+     if(!done&&pending===0)resolve(null);
+   });
+ });
 }
 function setSource(s){
  const el=$('lookupSource');
@@ -388,16 +396,13 @@ async function lookup(){
  const r=await resolveProduct(c);
  if(seq!==lookupSeq)return;
  if(r){
-   foundName=r.name;foundSource=r.source;
-   $('lookup').textContent='Encontrado: '+foundName;setSource(foundSource);showPriceHint(c,foundName);
+   prepareScannedProduct(c,r);
  }else{
-   $('lookup').textContent='Não encontrei automaticamente. Digite o nome uma vez:';
-   setSource('Será salvo no seu cadastro');
-   $('manual').classList.remove('hidden');$('name').focus();
+   prepareScannedProduct(c,null);
  }
 }
 function resetEntry(){
- ['name','price','kgprice','kg','weightTotal','normalPrice','clubPrice'].forEach(i=>{if($(i))$(i).value=''});
+ ['name','price','kgprice','kg','weightTotal','normalPrice'].forEach(i=>{if($(i))$(i).value=''});
  $('qty').value='1';$('weightToggle').checked=false;$('promoToggle').checked=false;
  $('unit').classList.remove('hidden');$('weight').classList.add('hidden');$('promoBox').classList.add('hidden');
 }
@@ -407,9 +412,11 @@ function prepareScannedProduct(code,result){
  resumeScannerAfterAdd=false;entryWithoutCode=false;resetEntry();$('ean').value=code;currentKey=code;
  if(result){
    foundName=result.name;foundSource=result.source||'';$('name').value=foundName;
+   const ph=historyFor(code,foundName),last=ph.length?ph[ph.length-1]:null;
+   if(last&&last.price>0)$('price').value=String(last.price.toFixed(2)).replace('.',',');
    $('sheetStatus').textContent='✅ PRODUTO ENCONTRADO';$('sheetCode').textContent='EAN: '+code;
    $('lookup').textContent='✅ Produto encontrado: '+foundName;setSource(foundSource);showPriceHint(code,foundName);
-   $('msg').textContent='Confira nome, valor e quantidade antes de adicionar.';
+   $('msg').textContent=last?'Último preço preenchido automaticamente. Confira antes de adicionar.':'Confira nome, valor e quantidade antes de adicionar.';
  }else{
    foundName='';foundSource='';$('sheetStatus').textContent='⚠️ PRODUTO NÃO ENCONTRADO';$('sheetCode').textContent='Código lido: '+code;
    $('lookup').textContent='⚠️ Código lido corretamente, mas o produto não foi encontrado na base.';
@@ -443,9 +450,9 @@ $('manualNoCode').onclick=prepareNoCode;
 $('closeSheet').onclick=closeProductSheet;
 $('productSheet').addEventListener('click',e=>{if(e.target===$('productSheet'))closeProductSheet()});
 function updateEntryCalc(){
- const q=Math.max(1,Math.floor(num($('qty').value)||1)),p=num($('price').value),cp=num($('clubPrice').value);
+ const q=Math.max(1,Math.floor(num($('qty').value)||1)),p=num($('price').value);
  $('qty').value=q;
- const expected=$('promoToggle').checked&&cp>0?cp:p;
+ const expected=p;
  $('unitCalc').textContent=expected>0?q+' × '+money(expected)+' = '+money(q*expected):'';
  const kp=num($('kgprice').value),kg=num($('kg').value),wt=num($('weightTotal').value);
  if(wt>0)$('weightCalc').innerHTML='⚖️ Valor informado pela balança: <b>'+money(wt)+'</b>';
@@ -455,7 +462,7 @@ function updateEntryCalc(){
 }
 $('qtyMinus').onclick=()=>{$('qty').value=Math.max(1,Math.floor(num($('qty').value)||1)-1);updateEntryCalc()};
 $('qtyPlus').onclick=()=>{$('qty').value=Math.max(1,Math.floor(num($('qty').value)||1)+1);updateEntryCalc()};
-['qty','price','kgprice','kg','weightTotal','normalPrice','clubPrice'].forEach(i=>$(i).addEventListener('input',updateEntryCalc));
+['qty','price','kgprice','kg','weightTotal','normalPrice'].forEach(i=>$(i).addEventListener('input',updateEntryCalc));
 $('weightToggle').onchange=()=>{$('unit').classList.toggle('hidden',$('weightToggle').checked);$('weight').classList.toggle('hidden',!$('weightToggle').checked);updateEntryCalc()};
 $('promoToggle').onchange=()=>{$('promoBox').classList.toggle('hidden',!$('promoToggle').checked);updateEntryCalc()};
 $('add').onclick=()=>{
@@ -464,18 +471,17 @@ $('add').onclick=()=>{
  if(!name){$('msg').textContent='Informe o nome do produto.';return}
  if(code)products[code]={name,source:foundName?'Confirmado por você':'Cadastrado por você'};
  const w=$('weightToggle').checked,promo=$('promoToggle').checked;
- const normal=num($('normalPrice').value),club=num($('clubPrice').value);
+ const normal=num($('normalPrice').value);
  let item;
  if(w){
    const kp=num($('kgprice').value),kg=num($('kg').value),wt=num($('weightTotal').value);
    const estimated=wt>0?wt:(kp>0&&kg>0?kp*kg:0);
    item={code,name,byWeight:true,price:kp,kg:kg||0,total:estimated,pending:estimated<=0,pendingPrice:estimated<=0,estimated:wt<=0&&estimated>0,
-         scaleTotal:wt||0,promo,promoNormal:normal||0,promoClub:club||0};
+         scaleTotal:wt||0,promo,promoNormal:normal||0,promoClub:estimated||0};
  }else{
    let p=num($('price').value),q=Math.max(1,Math.floor(num($('qty').value)||1));
-   if(promo&&club>0)p=club;
-   if(p<=0){$('msg').textContent='Informe o valor do produto.';return}
-   item={code,name,byWeight:false,price:p,qty:q,pending:false,pendingPrice:false,total:p*q,promo,promoNormal:normal||0,promoClub:club||0};
+      if(p<=0){$('msg').textContent='Informe o valor do produto.';return}
+   item={code,name,byWeight:false,price:p,qty:q,pending:false,pendingPrice:false,total:p*q,promo,promoNormal:normal||0,promoClub:estimated||0};
  }
  active.items.push(item);autoCheckWishlist(name);save();renderCart();closeProductSheet();
  $('ean').value='';$('lookup').textContent='';setSource('');$('priceHint').classList.add('hidden');
@@ -484,7 +490,9 @@ $('add').onclick=()=>{
 function renderCart(){
  if(!active)return;
  let b=$('cart');b.innerHTML='';
+ const q=normTxt(($('cartSearch')&&$('cartSearch').value)||'');
  active.items.forEach((x,i)=>{
+   if(q&&!normTxt((x.name||'')+' '+(x.code||'')).includes(q))return;
    let r=document.createElement('div');r.className='item';
    const detail=x.byWeight?(x.pending?'⚠️ Peso/valor a conferir na nota':((x.price?money(x.price)+'/kg • ':'')+(x.kg?x.kg+' kg':'valor da balança')+(x.estimated?' • estimado':''))):(x.qty+' × '+money(x.price)+(x.promo?' • 📱 app/clube':''));
    const value=(x.pending||x.pendingPrice)?'Pendente':money(x.total);
@@ -493,8 +501,22 @@ function renderCart(){
    r.querySelector('.delBtn').onclick=()=>{active.items.splice(i,1);save();renderCart()};
    b.appendChild(r)
  });
- $('total').textContent=money(active.items.reduce((s,x)=>s+(x.total||0),0));
+ let discounted=0,normal=0;
+ active.items.forEach(x=>{
+   const paid=Number(x.total||0);discounted+=paid;
+   if(x.promo&&Number(x.promoNormal)>0){
+     if(x.byWeight){
+       const basis=x.kg>0?x.kg:1;
+       normal+=Number(x.promoNormal)*basis;
+     }else normal+=Number(x.promoNormal)*(Number(x.qty)||1);
+   }else normal+=paid;
+ });
+ $('total').textContent=money(discounted);
+ $('totalNormal').textContent=money(normal);
+ const economy=Math.max(0,normal-discounted);
+ $('totalEconomy').textContent=economy>0?'Economia com descontos: '+money(economy):'';
 }
+if($('cartSearch'))$('cartSearch').addEventListener('input',renderCart);
 function openEdit(i){
  if(!active||!active.items[i])return;editingIndex=i;const x=active.items[i];
  $('editPanel').classList.remove('hidden');$('editLabel').textContent=x.code?'EAN '+x.code:'Item sem EAN';
@@ -602,17 +624,35 @@ $('historyReopen').onclick=()=>{
  selectedHistoryIndex=-1;save();$('historyDetail').classList.add('hidden');update();document.querySelector('[data-tab="buy"]').click();
 };
 function buildPriceMap(){let map={};purchases.forEach(p=>p.items.filter(x=>Number(x.price)>0).forEach(x=>{let k=x.code||x.name;if(!map[k])map[k]={key:k,name:x.name,a:[]};map[k].a.push({date:p.started,store:p.store,price:x.price,unit:x.byWeight?'kg':'un'})}));Object.values(map).forEach(x=>x.a.sort((a,b)=>new Date(a.date)-new Date(b.date)));return map}
-function renderPrices(){let map=buildPriceMap(),b=$('priceList');b.innerHTML='';let a=Object.values(map);if(!a.length){b.innerHTML='<div class="muted">Nenhum preço registrado.</div>';return}a.forEach(x=>{let e=x.a[x.a.length-1],min=Math.min(...x.a.map(y=>y.price)),r=document.createElement('div');r.className='item';r.innerHTML=`<div><div class="name">${x.name}</div><div class="muted">${x.a.length} registro(s) • menor ${money(min)}/${e.unit}</div></div><div class="right"><div class="name">${money(e.price)}/${e.unit}</div><button class="secondary" style="margin-top:6px">Ver gráfico</button></div>`;r.querySelector('button').onclick=()=>showChart(x);b.appendChild(r)})}
-function showChart(x){
- $('chartCard').classList.remove('hidden');$('chartTitle').textContent=x.name;$('chartSubtitle').textContent='Evolução do preço pago';
- const c=$('chart'),ctx=c.getContext('2d'),W=c.width,H=c.height,pad=35;ctx.clearRect(0,0,W,H);
- const vals=x.a.map(e=>e.price),min=Math.min(...vals),max=Math.max(...vals),lo=min===max?min*.9:min,hi=min===max?max*1.1:max,range=(hi-lo)||1;
+let openPriceKey='';
+function drawInlineChart(x,canvas,rows){
+ const ctx=canvas.getContext('2d'),W=canvas.width,H=canvas.height,pad=35;ctx.clearRect(0,0,W,H);
+ const vals=x.a.map(e=>e.price),min=Math.min(...vals),max=Math.max(...vals),lo=min===max?Math.max(0,min*.9):min,hi=min===max?max*1.1:max,range=(hi-lo)||1;
  ctx.strokeStyle='#d9dee5';ctx.lineWidth=1;for(let i=0;i<4;i++){let y=pad+i*(H-2*pad)/3;ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-pad,y);ctx.stroke()}
  ctx.strokeStyle='#1769ff';ctx.lineWidth=3;ctx.beginPath();x.a.forEach((e,i)=>{let xx=x.a.length===1?W/2:pad+i*(W-2*pad)/(x.a.length-1),yy=H-pad-(e.price-lo)/range*(H-2*pad);i?ctx.lineTo(xx,yy):ctx.moveTo(xx,yy)});ctx.stroke();
  ctx.fillStyle='#1769ff';x.a.forEach((e,i)=>{let xx=x.a.length===1?W/2:pad+i*(W-2*pad)/(x.a.length-1),yy=H-pad-(e.price-lo)/range*(H-2*pad);ctx.beginPath();ctx.arc(xx,yy,5,0,Math.PI*2);ctx.fill()});
- const rows=$('chartRows');rows.innerHTML='';x.a.slice().reverse().forEach(e=>{let r=document.createElement('div');r.className='item';r.innerHTML=`<div><div class="name">${fmt(e.date)}</div><div class="muted">${e.store}</div></div><div class="name">${money(e.price)}/${e.unit}</div>`;rows.appendChild(r)})
+ rows.innerHTML='';x.a.slice().reverse().forEach(e=>{let r=document.createElement('div');r.className='item';r.innerHTML=`<div><div class="name">${fmt(e.date)}</div><div class="muted">${esc(e.store)}</div></div><div class="name">${money(e.price)}/${e.unit}</div>`;rows.appendChild(r)});
 }
-$('closeChart').onclick=()=>$('chartCard').classList.add('hidden');
+function renderPrices(){
+ let map=buildPriceMap(),b=$('priceList');b.innerHTML='';
+ let query=normTxt(($('priceSearch')&&$('priceSearch').value)||'');
+ let a=Object.values(map).filter(x=>!query||normTxt(x.name+' '+x.key).includes(query));
+ if(!a.length){b.innerHTML='<div class="muted">Nenhum produto encontrado.</div>';return}
+ a.forEach(x=>{
+   let e=x.a[x.a.length-1],min=Math.min(...x.a.map(y=>y.price)),wrap=document.createElement('div');
+   wrap.style.marginBottom='8px';
+   const r=document.createElement('div');r.className='item';
+   r.innerHTML=`<div><div class="name">${esc(x.name)}</div><div class="muted">${x.a.length} registro(s) • menor ${money(min)}/${e.unit}</div></div><div class="right"><div class="name">Último: ${money(e.price)}/${e.unit}</div><button class="secondary" style="margin-top:6px">${openPriceKey===x.key?'Fechar histórico':'Ver histórico'}</button></div>`;
+   wrap.appendChild(r);
+   if(openPriceKey===x.key){
+     const chart=document.createElement('div');chart.className='card';chart.style.margin='0 0 8px';chart.innerHTML=`<div class="muted">Histórico de ${esc(x.name)}</div><canvas width="700" height="220" style="width:100%;height:auto;margin-top:8px"></canvas><div class="chartRowsInline"></div>`;
+     wrap.appendChild(chart);setTimeout(()=>drawInlineChart(x,chart.querySelector('canvas'),chart.querySelector('.chartRowsInline')),0);
+   }
+   r.querySelector('button').onclick=()=>{openPriceKey=openPriceKey===x.key?'':x.key;renderPrices()};
+   b.appendChild(wrap);
+ });
+}
+if($('priceSearch'))$('priceSearch').addEventListener('input',()=>{openPriceKey='';renderPrices()});
 function normTxt(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim()}
 function usefulTokens(s){
  const stop=new Set(['de','da','do','das','dos','com','sem','para','und','un','kg','gr','g','ml','lt','l']);
@@ -674,8 +714,8 @@ function matchReceipt(cart,receiptItems){
    const cp=Number(c.price||0);
    if(c.byWeight&&c.pending){
      reasons.push('⚠️ Produto pendente por peso/valor: conferir pelos dados da nota');
-   }else if(c.promo&&Number(c.promoClub)>0&&Number(r.unitPrice)>=0&&Math.abs(Number(c.promoClub)-Number(r.unitPrice))>.011){
-     reasons.push('🚨 Promoção não aplicada ou valor diferente: esperado com app '+money(c.promoClub)+' / nota '+money(r.unitPrice));
+   }else if(c.promo&&Number(c.price)>0&&Number(r.unitPrice)>=0&&Math.abs(Number(c.price)-Number(r.unitPrice))>.011){
+     reasons.push('🚨 Promoção não aplicada ou valor diferente: esperado com app '+money(c.price)+' / nota '+money(r.unitPrice));
    }else if(cp>0&&Number(r.unitPrice)>=0&&Math.abs(cp-Number(r.unitPrice))>.011){
      reasons.push('❌ Preço divergente: compra '+money(cp)+' / nota '+money(r.unitPrice));
    }
@@ -723,9 +763,9 @@ function normalizeOfficialUrl(raw){
  if(/^http:\/\//i.test(u))u='https://'+u.slice(7);
  return u;
 }
-function backendBase(){return (localStorage.getItem('v14_nfce_backend')||localStorage.getItem('v13_nfce_backend')||localStorage.getItem('v11_nfce_backend')||localStorage.getItem('v10_nfce_backend')||localStorage.getItem('v9_nfce_backend')||'').trim().replace(/\/$/,'')}
+function backendBase(){return (localStorage.getItem('v15_nfce_backend')||localStorage.getItem('v14_nfce_backend')||localStorage.getItem('v13_nfce_backend')||localStorage.getItem('v11_nfce_backend')||localStorage.getItem('v10_nfce_backend')||localStorage.getItem('v9_nfce_backend')||'').trim().replace(/\/$/,'')}
 function updateBackendStatus(){const u=backendBase();$('backendUrl').value=u;$('backendStatus').textContent=u?'✓ Servidor configurado: '+u:'Servidor ainda não configurado. A NFC-e pode ser aberta, mas a importação automática depende deste servidor.'}
-$('saveBackend').onclick=()=>{let u=$('backendUrl').value.trim().replace(/\/$/,'');if(u&&!/^https:\/\//i.test(u)){alert('Use um endereço https://');return}if(u)localStorage.setItem('v14_nfce_backend',u);else{localStorage.removeItem('v14_nfce_backend');localStorage.removeItem('v13_nfce_backend');localStorage.removeItem('v11_nfce_backend');localStorage.removeItem('v10_nfce_backend');localStorage.removeItem('v9_nfce_backend');}updateBackendStatus()};
+$('saveBackend').onclick=()=>{let u=$('backendUrl').value.trim().replace(/\/$/,'');if(u&&!/^https:\/\//i.test(u)){alert('Use um endereço https://');return}if(u)localStorage.setItem('v15_nfce_backend',u);else{localStorage.removeItem('v14_nfce_backend');localStorage.removeItem('v13_nfce_backend');localStorage.removeItem('v11_nfce_backend');localStorage.removeItem('v10_nfce_backend');localStorage.removeItem('v9_nfce_backend');}updateBackendStatus()};
 async function fetchReceiptHtml(url){
  const b=backendBase();
  if(b){
@@ -790,7 +830,7 @@ $('pdfReport').onclick=()=>{
  w.document.close();
 };
 
-$('backup').onclick=()=>{let blob=new Blob([JSON.stringify({date:new Date().toISOString(),products,purchases},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='backup-carrinho-scanner-v14.json';a.click()};
+$('backup').onclick=()=>{let blob=new Blob([JSON.stringify({date:new Date().toISOString(),products,purchases},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='backup-carrinho-scanner-v15.json';a.click()};
 document.querySelectorAll('.tab').forEach(x=>x.onclick=()=>{document.querySelectorAll('.tab').forEach(y=>y.classList.remove('active'));document.querySelectorAll('.panel').forEach(y=>y.classList.add('hidden'));x.classList.add('active');$(x.dataset.tab).classList.remove('hidden');update()});
 async function stop(which){let s=which==='qr'?qstream:stream,t=which==='qr'?qtimer:timer;if(t)clearInterval(t);if(s)s.getTracks().forEach(x=>x.stop());if(which==='qr'){qstream=null;qtimer=null;$('qrCamBox').classList.add('hidden');$('torchQR').classList.add('hidden');$('zoomWrap').classList.add('hidden')}else{stream=null;timer=null;$('camBox').classList.add('hidden')}}
 async function configureQrTrack(track){
@@ -828,7 +868,7 @@ async function camera(mode){
      const raw=String(c[0].rawValue||'').trim();
      if(mode==='qr'){if(scannerBusy)return;scannerBusy=true;try{await processQR(raw)}finally{scannerBusy=false}}
      else{const code=raw.replace(/\D/g,'');if(!code||scannerBusy||code===scanLockedCode)return;scanLockedCode=code;await handleScannedProduct(code)}
-   }catch(e){}finally{detecting=false}},mode==='qr'?180:300);
+   }catch(e){}finally{detecting=false}},mode==='qr'?180:160);
    if(mode==='qr')qtimer=ti;else timer=ti;
  }catch(e){status.textContent=mode==='qr'?'❌ Não foi possível abrir a câmera. Tente ler o QR de uma foto.':'❌ Falha na leitura/câmera. Feche e tente novamente.'}
 }

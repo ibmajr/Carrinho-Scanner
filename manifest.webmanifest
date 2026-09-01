@@ -1,5 +1,5 @@
 {
-  "name": "Carrinho Scanner V14",
+  "name": "Carrinho Scanner V15",
   "short_name": "Carrinho Scanner",
   "start_url": "./",
   "display": "standalone",
@@ -17,5 +17,5 @@
       "type": "image/png"
     }
   ],
-  "description": "Compra rápida com scanner sob demanda, itens por peso, promoções, lista, histórico e conferência NFC-e."
+  "description": "Scanner rápido com último preço automático, busca na compra, histórico pesquisável, descontos e NFC-e."
 }
