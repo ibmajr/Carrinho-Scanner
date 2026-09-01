@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#1769ff"><link rel="manifest" href="manifest.webmanifest">
-<title>Carrinho Scanner V15</title>
+<title>Carrinho Scanner V16</title>
 <style>
 :root{--b:#1769ff;--bg:#f5f7fa;--c:#fff;--t:#17191c;--m:#69727d;--l:#dde3ea;--g:#18763b;--r:#bd2525}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;color:var(--t)}
@@ -49,7 +49,7 @@ canvas{width:100%;height:220px;background:#fff;border:1px solid var(--l);border-
 </style>
 </head>
 <body><div class="app">
-<h1>Carrinho Scanner</h1><div class="sub">V15 • compra rápida + histórico de preços</div>
+<h1>Carrinho Scanner</h1><div class="sub">V16 • compra rápida + comparação de preços</div>
 
 <div id="activeBanner" class="banner hidden">
  <div class="muted">Compra em andamento</div><div id="activeTitle" class="big"></div><div id="activeDate" class="muted"></div>
@@ -111,6 +111,10 @@ canvas{width:100%;height:220px;background:#fff;border:1px solid var(--l);border-
    <div id="promoBox" class="promoBox hidden">
      <label>Preço sem app/clube</label><input id="normalPrice" inputmode="decimal" placeholder="R$ 0,00">
      <div class="muted">📱 O valor principal acima já é o preço com app/clube.</div>
+   </div>
+   <div id="marketPriceBox" class="banner hidden" style="margin-top:8px">
+     <div class="row"><div class="grow"><div class="name">🛒 Preços recentes próximos</div><div id="marketPriceStatus" class="muted">Consulta Menor Preço • Nota Paraná</div></div><button id="marketPriceRetry" class="secondary">Atualizar</button></div>
+     <div id="marketPriceResult" style="margin-top:8px"></div>
    </div>
    <div id="msg" class="muted" style="margin:8px 0"></div>
    <button id="add" class="primary" style="width:100%">ADICIONAR</button>
@@ -245,12 +249,12 @@ const num=v=>{let s=String(v||'').trim();if(!s)return 0;if(s.includes(','))s=s.r
 const fmt=s=>new Date(s).toLocaleString('pt-BR');
 const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[c]));
 // V11 migra automaticamente os dados anteriores para não perder histórico.
-let products=JSON.parse(localStorage.getItem('v15_products')||localStorage.getItem('v14_products')||localStorage.getItem('v13_products')||localStorage.getItem('v11_products')||localStorage.getItem('v10_products')||localStorage.getItem('v9_products')||localStorage.getItem('v6_products')||localStorage.getItem('v5_products')||localStorage.getItem('v4_products')||'{}'),
-    purchases=JSON.parse(localStorage.getItem('v15_purchases')||localStorage.getItem('v14_purchases')||localStorage.getItem('v13_purchases')||localStorage.getItem('v11_purchases')||localStorage.getItem('v10_purchases')||localStorage.getItem('v9_purchases')||localStorage.getItem('v6_purchases')||localStorage.getItem('v5_purchases')||localStorage.getItem('v4_purchases')||'[]'),
-    active=JSON.parse(localStorage.getItem('v15_active')||localStorage.getItem('v14_active')||localStorage.getItem('v13_active')||localStorage.getItem('v11_active')||localStorage.getItem('v10_active')||localStorage.getItem('v9_active')||localStorage.getItem('v6_active')||localStorage.getItem('v5_active')||localStorage.getItem('v4_active')||'null'),
+let products=JSON.parse(localStorage.getItem('v16_products')||localStorage.getItem('v15_products')||localStorage.getItem('v14_products')||localStorage.getItem('v13_products')||localStorage.getItem('v11_products')||localStorage.getItem('v10_products')||localStorage.getItem('v9_products')||localStorage.getItem('v6_products')||localStorage.getItem('v5_products')||localStorage.getItem('v4_products')||'{}'),
+    purchases=JSON.parse(localStorage.getItem('v16_purchases')||localStorage.getItem('v15_purchases')||localStorage.getItem('v14_purchases')||localStorage.getItem('v13_purchases')||localStorage.getItem('v11_purchases')||localStorage.getItem('v10_purchases')||localStorage.getItem('v9_purchases')||localStorage.getItem('v6_purchases')||localStorage.getItem('v5_purchases')||localStorage.getItem('v4_purchases')||'[]'),
+    active=JSON.parse(localStorage.getItem('v16_active')||localStorage.getItem('v15_active')||localStorage.getItem('v14_active')||localStorage.getItem('v13_active')||localStorage.getItem('v11_active')||localStorage.getItem('v10_active')||localStorage.getItem('v9_active')||localStorage.getItem('v6_active')||localStorage.getItem('v5_active')||localStorage.getItem('v4_active')||'null'),
     foundName='',foundSource='',stream=null,timer=null,qstream=null,qtimer=null,currentKey='',lookupSeq=0,scannerBusy=false,scanLockedCode='',lastComparison=null,lastReceipt=null,editingIndex=-1,resumeScannerAfterAdd=false,selectedHistoryIndex=-1;
 let entryWithoutCode=false;
-let wishlist=JSON.parse(localStorage.getItem('v15_wishlist')||localStorage.getItem('v14_wishlist')||localStorage.getItem('v13_wishlist')||'[]');
+let wishlist=JSON.parse(localStorage.getItem('v16_wishlist')||localStorage.getItem('v15_wishlist')||localStorage.getItem('v14_wishlist')||localStorage.getItem('v13_wishlist')||'[]');
 
 const verifiedSeed={
  "7896004704623":{name:"Maleato de Dexclorfeniramina + Betametasona EMS 120 ml",source:"Cadastro verificado"},
@@ -261,10 +265,10 @@ const verifiedSeed={
 };
 
 function save(){
- localStorage.setItem('v15_products',JSON.stringify(products));
- localStorage.setItem('v15_purchases',JSON.stringify(purchases));
- localStorage.setItem('v15_active',JSON.stringify(active));
- localStorage.setItem('v15_wishlist',JSON.stringify(wishlist));
+ localStorage.setItem('v16_products',JSON.stringify(products));
+ localStorage.setItem('v16_purchases',JSON.stringify(purchases));
+ localStorage.setItem('v16_active',JSON.stringify(active));
+ localStorage.setItem('v16_wishlist',JSON.stringify(wishlist));
 }
 function historyFor(code,name){
   const key=code||name, arr=[];
@@ -402,12 +406,64 @@ async function lookup(){
  }
 }
 function resetEntry(){
+ if($('marketPriceBox')){$('marketPriceBox').classList.add('hidden');$('marketPriceResult').innerHTML='';}
+
  ['name','price','kgprice','kg','weightTotal','normalPrice'].forEach(i=>{if($(i))$(i).value=''});
  $('qty').value='1';$('weightToggle').checked=false;$('promoToggle').checked=false;
  $('unit').classList.remove('hidden');$('weight').classList.add('hidden');$('promoBox').classList.add('hidden');
 }
 function openProductSheet(){ $('productSheet').classList.remove('hidden');updateEntryCalc() }
 function closeProductSheet(){ $('productSheet').classList.add('hidden');entryWithoutCode=false;foundName='';foundSource='';currentKey=''; }
+
+function geohashEncode(lat,lon,precision=9){
+ const base32='0123456789bcdefghjkmnpqrstuvwxyz';let idx=0,bit=0,even=true,hash='',latMin=-90,latMax=90,lonMin=-180,lonMax=180;
+ while(hash.length<precision){
+  if(even){const mid=(lonMin+lonMax)/2;if(lon>=mid){idx=idx*2+1;lonMin=mid}else{idx*=2;lonMax=mid}}
+  else{const mid=(latMin+latMax)/2;if(lat>=mid){idx=idx*2+1;latMin=mid}else{idx*=2;latMax=mid}}
+  even=!even;bit++;if(bit===5){hash+=base32[idx];bit=0;idx=0}
+ }return hash;
+}
+function getGeo(){
+ return new Promise((resolve,reject)=>{
+  if(!navigator.geolocation)return reject(new Error('Geolocalização não disponível'));
+  navigator.geolocation.getCurrentPosition(
+   p=>resolve({lat:p.coords.latitude,lon:p.coords.longitude}),
+   ()=>reject(new Error('Permita a localização para buscar preços próximos.')),
+   {enableHighAccuracy:false,timeout:8000,maximumAge:300000}
+  );
+ });
+}
+async function queryMenorPrecoPR(code,name){
+ const box=$('marketPriceBox'),status=$('marketPriceStatus'),out=$('marketPriceResult');if(!box||!code)return;
+ box.classList.remove('hidden');status.textContent='Buscando vendas de hoje em até 20 km...';out.innerHTML='';
+ try{
+  const pos=await getGeo(),local=geohashEncode(pos.lat,pos.lon,9),term=encodeURIComponent(code||name);
+  let cats=[];
+  try{
+   const cr=await fetch('https://menorpreco.notaparana.pr.gov.br/api/v1/categorias?local='+local+'&termo='+term+'&raio=20',{headers:{Accept:'application/json'}});
+   if(cr.ok){const cj=await cr.json();cats=cj.categorias||[]}
+  }catch(e){}
+  const urls=(cats.length?cats.slice(0,3).map(c=>'https://menorpreco.notaparana.pr.gov.br/api/v1/produtos?local='+local+'&termo='+term+'&categoria='+encodeURIComponent(c.id)+'&offset=0&raio=20&data=-1&ordem=0'):
+   ['https://menorpreco.notaparana.pr.gov.br/api/v1/produtos?local='+local+'&termo='+term+'&offset=0&raio=20&data=-1&ordem=0']);
+  const rs=await Promise.allSettled(urls.map(u=>fetch(u,{headers:{Accept:'application/json'}}).then(async r=>r.ok?r.json():Promise.reject(new Error('HTTP '+r.status)))));
+  let all=[];rs.forEach(x=>{if(x.status==='fulfilled'&&Array.isArray(x.value.produtos))all.push(...x.value.produtos)});
+  const seen=new Set();all=all.filter(x=>{const k=(x.desc||'')+'|'+(x.valor||'')+'|'+((x.estabelecimento||{}).nm_fan||'');if(seen.has(k))return false;seen.add(k);return true});
+  all.sort((a,b)=>(Number(String(a.valor_desconto||a.valor||0).replace(',','.'))||999999)-(Number(String(b.valor_desconto||b.valor||0).replace(',','.'))||999999));
+  if(!all.length){status.textContent='Nenhum preço de hoje encontrado em até 20 km.';out.innerHTML='<div class="muted">Pode não haver venda recente deste EAN ou o navegador pode ter bloqueado a consulta direta.</div>';return}
+  const vals=all.map(x=>Number(String(x.valor_desconto||x.valor||0).replace(',','.'))||0).filter(v=>v>0),min=Math.min(...vals),max=Math.max(...vals),current=num($('price').value);
+  let alert='';
+  if(current>0&&min>0){const pct=(current-min)/min*100;
+   if(pct>25)alert='<div class="bad" style="font-weight:800;margin-bottom:6px">🚨 Seu preço está '+pct.toFixed(0)+'% acima do menor preço encontrado hoje.</div>';
+   else if(pct>10)alert='<div class="pending" style="font-weight:800;margin-bottom:6px">⚠️ Seu preço está '+pct.toFixed(0)+'% acima do menor preço encontrado hoje.</div>';
+   else alert='<div class="good" style="font-weight:800;margin-bottom:6px">✅ Seu preço está dentro da faixa recente.</div>';
+  }
+  out.innerHTML=alert+'<div class="name">Faixa hoje: '+money(min)+' a '+money(max)+'</div>'+all.slice(0,5).map(x=>{const e=x.estabelecimento||{},v=Number(String(x.valor_desconto||x.valor||0).replace(',','.'))||0;return '<div class="item"><div><div class="name">'+esc(x.desc||name)+'</div><div class="muted">'+esc(e.nm_fan||'Estabelecimento')+(e.mun?' • '+esc(e.mun):'')+'</div></div><div class="name">'+money(v)+'</div></div>'}).join('');
+  status.textContent=all.length+' preço(s) encontrado(s) hoje • raio 20 km';
+ }catch(err){
+  status.textContent='Não foi possível consultar automaticamente.';
+  out.innerHTML='<div class="muted">'+esc(err.message||'Falha na consulta')+'<br>Função em teste: se houver bloqueio CORS, a compra continua normalmente.</div>';
+ }
+}
 function prepareScannedProduct(code,result){
  resumeScannerAfterAdd=false;entryWithoutCode=false;resetEntry();$('ean').value=code;currentKey=code;
  if(result){
@@ -417,6 +473,7 @@ function prepareScannedProduct(code,result){
    $('sheetStatus').textContent='✅ PRODUTO ENCONTRADO';$('sheetCode').textContent='EAN: '+code;
    $('lookup').textContent='✅ Produto encontrado: '+foundName;setSource(foundSource);showPriceHint(code,foundName);
    $('msg').textContent=last?'Último preço preenchido automaticamente. Confira antes de adicionar.':'Confira nome, valor e quantidade antes de adicionar.';
+   setTimeout(()=>queryMenorPrecoPR(code,foundName),80);
  }else{
    foundName='';foundSource='';$('sheetStatus').textContent='⚠️ PRODUTO NÃO ENCONTRADO';$('sheetCode').textContent='Código lido: '+code;
    $('lookup').textContent='⚠️ Código lido corretamente, mas o produto não foi encontrado na base.';
@@ -465,6 +522,7 @@ $('qtyPlus').onclick=()=>{$('qty').value=Math.max(1,Math.floor(num($('qty').valu
 ['qty','price','kgprice','kg','weightTotal','normalPrice'].forEach(i=>$(i).addEventListener('input',updateEntryCalc));
 $('weightToggle').onchange=()=>{$('unit').classList.toggle('hidden',$('weightToggle').checked);$('weight').classList.toggle('hidden',!$('weightToggle').checked);updateEntryCalc()};
 $('promoToggle').onchange=()=>{$('promoBox').classList.toggle('hidden',!$('promoToggle').checked);updateEntryCalc()};
+$('marketPriceRetry').onclick=()=>queryMenorPrecoPR($('ean').value.trim(),$('name').value.trim()||foundName);
 $('add').onclick=()=>{
  if(!active)return;
  let code=entryWithoutCode?'':$('ean').value.trim(),name=$('name').value.trim()||foundName;
@@ -481,7 +539,7 @@ $('add').onclick=()=>{
  }else{
    let p=num($('price').value),q=Math.max(1,Math.floor(num($('qty').value)||1));
       if(p<=0){$('msg').textContent='Informe o valor do produto.';return}
-   item={code,name,byWeight:false,price:p,qty:q,pending:false,pendingPrice:false,total:p*q,promo,promoNormal:normal||0,promoClub:estimated||0};
+   item={code,name,byWeight:false,price:p,qty:q,pending:false,pendingPrice:false,total:p*q,promo,promoNormal:normal||0,promoClub:p||0};
  }
  active.items.push(item);autoCheckWishlist(name);save();renderCart();closeProductSheet();
  $('ean').value='';$('lookup').textContent='';setSource('');$('priceHint').classList.add('hidden');
@@ -763,9 +821,9 @@ function normalizeOfficialUrl(raw){
  if(/^http:\/\//i.test(u))u='https://'+u.slice(7);
  return u;
 }
-function backendBase(){return (localStorage.getItem('v15_nfce_backend')||localStorage.getItem('v14_nfce_backend')||localStorage.getItem('v13_nfce_backend')||localStorage.getItem('v11_nfce_backend')||localStorage.getItem('v10_nfce_backend')||localStorage.getItem('v9_nfce_backend')||'').trim().replace(/\/$/,'')}
+function backendBase(){return (localStorage.getItem('v16_nfce_backend')||localStorage.getItem('v15_nfce_backend')||localStorage.getItem('v14_nfce_backend')||localStorage.getItem('v13_nfce_backend')||localStorage.getItem('v11_nfce_backend')||localStorage.getItem('v10_nfce_backend')||localStorage.getItem('v9_nfce_backend')||'').trim().replace(/\/$/,'')}
 function updateBackendStatus(){const u=backendBase();$('backendUrl').value=u;$('backendStatus').textContent=u?'✓ Servidor configurado: '+u:'Servidor ainda não configurado. A NFC-e pode ser aberta, mas a importação automática depende deste servidor.'}
-$('saveBackend').onclick=()=>{let u=$('backendUrl').value.trim().replace(/\/$/,'');if(u&&!/^https:\/\//i.test(u)){alert('Use um endereço https://');return}if(u)localStorage.setItem('v15_nfce_backend',u);else{localStorage.removeItem('v14_nfce_backend');localStorage.removeItem('v13_nfce_backend');localStorage.removeItem('v11_nfce_backend');localStorage.removeItem('v10_nfce_backend');localStorage.removeItem('v9_nfce_backend');}updateBackendStatus()};
+$('saveBackend').onclick=()=>{let u=$('backendUrl').value.trim().replace(/\/$/,'');if(u&&!/^https:\/\//i.test(u)){alert('Use um endereço https://');return}if(u)localStorage.setItem('v16_nfce_backend',u);else{localStorage.removeItem('v14_nfce_backend');localStorage.removeItem('v13_nfce_backend');localStorage.removeItem('v11_nfce_backend');localStorage.removeItem('v10_nfce_backend');localStorage.removeItem('v9_nfce_backend');}updateBackendStatus()};
 async function fetchReceiptHtml(url){
  const b=backendBase();
  if(b){
@@ -830,7 +888,7 @@ $('pdfReport').onclick=()=>{
  w.document.close();
 };
 
-$('backup').onclick=()=>{let blob=new Blob([JSON.stringify({date:new Date().toISOString(),products,purchases},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='backup-carrinho-scanner-v15.json';a.click()};
+$('backup').onclick=()=>{let blob=new Blob([JSON.stringify({date:new Date().toISOString(),products,purchases},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='backup-carrinho-scanner-v16.json';a.click()};
 document.querySelectorAll('.tab').forEach(x=>x.onclick=()=>{document.querySelectorAll('.tab').forEach(y=>y.classList.remove('active'));document.querySelectorAll('.panel').forEach(y=>y.classList.add('hidden'));x.classList.add('active');$(x.dataset.tab).classList.remove('hidden');update()});
 async function stop(which){let s=which==='qr'?qstream:stream,t=which==='qr'?qtimer:timer;if(t)clearInterval(t);if(s)s.getTracks().forEach(x=>x.stop());if(which==='qr'){qstream=null;qtimer=null;$('qrCamBox').classList.add('hidden');$('torchQR').classList.add('hidden');$('zoomWrap').classList.add('hidden')}else{stream=null;timer=null;$('camBox').classList.add('hidden')}}
 async function configureQrTrack(track){

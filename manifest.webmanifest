@@ -1,5 +1,5 @@
 {
-  "name": "Carrinho Scanner V15",
+  "name": "Carrinho Scanner V16",
   "short_name": "Carrinho Scanner",
   "start_url": "./",
   "display": "standalone",
@@ -17,5 +17,5 @@
       "type": "image/png"
     }
   ],
-  "description": "Scanner rápido com último preço automático, busca na compra, histórico pesquisável, descontos e NFC-e."
+  "description": "Scanner de compras com histórico e comparação experimental com preços de hoje do Menor Preço Nota Paraná."
 }
